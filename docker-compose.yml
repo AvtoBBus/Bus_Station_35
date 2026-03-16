@@ -1,0 +1,68 @@
+name: my-proj
+services:
+    mysql:
+        image: mysql:8.0
+        container_name: mysql_db
+        restart: unless-stopped
+        environment:
+            MYSQL_ROOT_PASSWORD: "root"
+            MYSQL_DATABASE: "new_schema"
+            MYSQL_ALLOW_EMPTY_PASSWORD: "no"
+        ports:
+            - "3307:3306"
+        volumes:
+            - mysql_data:/var/lib/mysql
+        command:
+            - --default-authentication-plugin=mysql_native_password
+            - --character-set-server=utf8mb4
+            - --collation-server=utf8mb4_unicode_ci
+        networks:
+            - app-network
+        healthcheck:
+            test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+            timeout: 30s
+            retries: 5
+            interval: 10s
+            start_period: 40s
+
+    xssdetector:
+        build:
+            context: ./xssdetector
+            dockerfile: Dockerfile
+        container_name: xss-detector
+        restart: unless-stopped
+        ports:
+            - "8001:8001"
+        volumes:
+            - ./xssdetector:/xssdetector
+        networks:
+            - app-network
+    fastapi:
+        build:
+            context: ./server
+            dockerfile: Dockerfile
+        container_name: fastapi_app
+        restart: unless-stopped
+        ports:
+            - "8000:8000"
+        volumes:
+            - ./server:/server
+        working_dir: /server
+        environment:
+            DATABASE_URL: mysql+aiomysql://root:root@mysql:3306/new_schema
+            DB_HOST: mysql
+            DB_PORT: 3306
+            DB_USER: "root"
+            DB_PASSWORD: "root"
+            DB_NAME: "new_schema"
+        depends_on:
+            mysql:
+                condition: service_healthy
+        networks:
+            - app-network
+volumes:
+    mysql_data:
+
+networks:
+    app-network:
+        driver: bridge
