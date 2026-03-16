@@ -23,7 +23,7 @@ class MessageService:
     async def create_message(self, new_message: MessagePostDTO):
 
         response = requests.request("POST",
-                                    "http://127.0.0.1:8080/predict?text=" + new_message.Text)
+                                    "http://xssdetector:8001/predict?text=" + new_message.Text)
 
         prediction_result = response.json()
 

@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Request
+from fastapi.concurrency import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import config
@@ -7,6 +8,7 @@ from app.config.logconfig import LOGGING_CONFIG
 from app.routers import message as messages_router
 
 from app.utils.logger import Colors, log_request_info, log_response_info
+from app.utils.db import Base, engine
 
 import logging
 from logging.config import dictConfig
@@ -16,8 +18,21 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Код до запуска приложения
+    print("🚀 Создаём таблицы...")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    print("✅ Таблицы готовы")
+    yield
+    # Код при остановке
+    print("👋 Останавливаем приложение")
+
 app = FastAPI(
-    swagger_ui_parameters={"syntaxHighlight": True}
+    swagger_ui_parameters={"syntaxHighlight": True},
+    lifespan=lifespan
 )
 
 dictConfig(LOGGING_CONFIG)
