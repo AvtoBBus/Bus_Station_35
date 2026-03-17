@@ -1,21 +1,30 @@
-.git
-__pycache__
-*.pyc
-*.pyo
-*.pyd
-.Python
+# Зависимости
+node_modules
+npm-debug.log
+package-lock.json
+yarn.lock
+yarn-error.log
+
+# Сборка
+build
+dist
 .env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
-*.log
-logs/
-*.sqlite3
+.env.local
+.env.*.local
+
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
 .DS_Store
-.dockerignore
+
+# Docker
 Dockerfile
-docker-compose.yml
-README.md
+.dockerignore
+docker-compose*.yml
