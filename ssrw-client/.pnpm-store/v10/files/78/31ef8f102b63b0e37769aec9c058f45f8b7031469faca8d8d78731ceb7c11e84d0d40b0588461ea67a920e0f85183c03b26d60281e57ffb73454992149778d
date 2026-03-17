@@ -1,0 +1,12 @@
+{
+    "name": "@types/react-bootstrap",
+    "version": "1.1.0",
+    "description": "Stub TypeScript definitions entry for react-bootstrap, which provides its own types definitions",
+    "main": "",
+    "scripts": {},
+    "license": "MIT",
+    "dependencies": {
+        "react-bootstrap": "*"
+    },
+    "deprecated": "This is a stub types definition. react-bootstrap provides its own type definitions, so you do not need this installed."
+}

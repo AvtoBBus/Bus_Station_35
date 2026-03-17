@@ -60,6 +60,25 @@ services:
                 condition: service_healthy
         networks:
             - app-network
+
+    client:
+        build:
+            context: ./ssrw-client
+            dockerfile: Dockerfile
+        container_name: client
+        restart: unless-stopped
+        ports:
+            - "3000:3000"
+        volumes:
+            - ./ssrw-client:/app
+            - /app/node_modules
+        environment:
+            - NODE_ENV=development
+        networks:
+            - app-network
+        depends_on:
+            - fastapi
+            - xssdetector
 volumes:
     mysql_data:
 
