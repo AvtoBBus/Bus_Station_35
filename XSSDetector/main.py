@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from catboost import CatBoostClassifier
+from catboost import CatBoostClassifier, Pool
 import joblib
 import pandas as pd
 import numpy as np
@@ -74,26 +74,21 @@ def get_risk_level(probability):
 
 def get_top_features(features_df, original_features):
     """Возвращает топ признаков, повлиявших на решение"""
-    try:
-        # Получаем важность признаков для этого конкретного предсказания
-        shap_values = model.get_feature_importance(
-            data=features_df,
-            type='ShapValues'
-        )
+    shap_values = model.get_feature_importance(
+        data=Pool(features_df, cat_features=metadata.get('cat_features'), text_features=['text']),
+        type='ShapValues',
+    )
+    contributions = shap_values[0, :-1]
 
-        # Сортируем по важности
-        feature_names = metadata['feature_names']
-        important = []
+    important = []
 
-        for idx in np.argsort(shap_values)[-5:][::-1]:
-            if shap_values[idx] > 0:
-                feature_name = feature_names[idx]
-                feature_value = original_features.get(feature_name, 0)
-                important.append(f"{feature_name}={feature_value}")
+    for idx in np.argsort(np.abs(contributions))[-3:][::-1]:
+        if abs(contributions[idx]) > 1e-6:
+            important.append(
+                f"{metadata['feature_names'][idx]}: {features_df.iloc[0, idx]} (вклад {contributions[idx]:.4f})"
+            )
 
-        return important
-    except:
-        return []
+    return important
 
 
 @app.post("/predict", response_model=PredictionResult)
