@@ -27,6 +27,8 @@ class MessageService:
 
         prediction_result = response.json()
 
+        print("Prediction result ", prediction_result)
+
         if not prediction_result["is_xss"]:
             async with self.db as session:
                 inserted = Message(

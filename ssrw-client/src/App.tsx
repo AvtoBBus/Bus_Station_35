@@ -43,11 +43,10 @@ export const App = () => {
             body: JSON.stringify(body),
             headers: { "content-type": "application/json" },
         })
-            .then((response) => {
+            .then(async (response) => {
                 if (response.status !== 204) {
-                    response.text().then((t) => {
-                        setError(JSON.parse(t)["detail"]);
-                    });
+                    const t = await response.text();
+                    setError(JSON.parse(t)["detail"]);
                 }
             })
             .finally(() => {
@@ -118,24 +117,21 @@ export const App = () => {
             <Card className="comments">
                 <Card.Header className="comments__title">Комментарии</Card.Header>
                 <ListGroup className="comments__list">
-                    {messages.map((message) => {
-                        return (
-                            <>
-                                <ListGroup.Item>
-                                    <Card>
-                                        <Card.Header>{message.UserName}</Card.Header>
-                                        <Card.Body>{message.Text}</Card.Body>
-                                    </Card>
-                                </ListGroup.Item>
-                            </>
-                        );
-                    })}
+                    {messages.map((message) => (
+                            <ListGroup.Item key={message.Date + message.Text}>
+                                <Card>
+                                    <Card.Header>{message.UserName}</Card.Header>
+                                    <Card.Body>{message.Text}</Card.Body>
+                                </Card>
+                            </ListGroup.Item>
+                        )
+                    )}
                 </ListGroup>
                 <Card.Footer>
-                    <Form onSubmit={(e) => sendComment(e)}>
+                    <Form onSubmit={(e) => sendComment(e)} key={userComment.Text}>
                         <Form.Label>Напишите свой комментарий</Form.Label>
-                        <Form.Control as="textarea" onChange={(e) => updateComment(e.target.value)} />
-                        <Button type="submit" className="send-button">
+                        <Form.Control as="textarea" onChange={(e) => updateComment(e.target.value)} value={userComment.Text}/>
+                        <Button type="submit" className="send-button" disabled={!!error || !userComment.Text}>
                             Отправить
                         </Button>
                     </Form>
