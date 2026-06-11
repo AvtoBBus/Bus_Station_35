@@ -1,12 +1,12 @@
 import re
 import urllib
 
-
-def extract_features1(text):
+def extract_features1(text, withText = True):
     """Извлекает 30+ признаков из HTML/JS кода"""
     features = {}
 
-    features['text'] = text
+    if withText:
+        features['text'] = text
 
     # Базовые признаки
     features['length'] = len(text)
@@ -82,7 +82,7 @@ def extract_features1(text):
     return features
 
 
-def extract_features2(text):
+def extract_features2(text, withText = True):
     """
     Извлекает 25 признаков безопасности из строки (URL/HTML/JS)
     на основе спецификации.
@@ -93,9 +93,10 @@ def extract_features2(text):
     Returns:
         Словарь с признаками безопасности
     """
-    features = {
-        'text': text
-    }
+    features = {}
+
+    if withText:
+        features['text'] = text
 
     # 1. url_length - длина URL
     features['url_length'] = len(text)
@@ -275,11 +276,12 @@ def extract_features2(text):
     return features
 
 
-def extract_features(text):
+def extract_features(text, withText = True):
     """Извлекает 80 признаков XSS из HTML/JS кода на основе исследования XSShield"""
-    features = {
-        'text': text
-    }
+    features = {}
+
+    if withText:
+        features['text'] = text
 
     # Все 80 признаков из таблицы A.6 исследования XSShield
     # Формат: название_признака: регулярное_выражение_для_поиска
