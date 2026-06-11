@@ -1,14 +1,14 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi import HTTPException, status
 
-from catboost import CatBoostClassifier, Pool
-import joblib
-import pandas as pd
-import numpy as np
-
-from utils.extract_features import extract_features
 from pydantic import BaseModel
 from typing import Literal, Any, List
+
+from utils.load_models import *
+
+import logging
+logger = logging.getLogger("uvicorn")
 
 app = FastAPI(
     swagger_ui_parameters={"syntaxHighlight": True}
@@ -22,41 +22,39 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-model = CatBoostClassifier()
-model.load_model("./model/catboost_xss_model.cbm")
-metadata = joblib.load('./model/model_metadata.pkl')
-
-THRESHOLD = 0.35
-
+models_functions = {
+    'catboost': {
+        'load': load_catboost,
+        'predict': predict_catboost
+    },
+    'rf': {
+        'load': load_random_forest,
+        'predict': predict_rf
+    },
+    'lr': {
+        'load': load_logistic_regression,
+        'predict': predict_lr
+    },
+    'svm': {
+        'load': load_svm,
+        'predict': predict_svm
+    },
+    'lstm': {
+        'load': load_lstm,
+        'predict': predict_lstm
+    }
+}
+THRESHLOD_DEFAULT = 0.35
 
 class PredictionResult(BaseModel):
     is_xss: bool
     probability: float
-    prediction: int
     threshold: float
     code_sample: str
     risk_level: Literal['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'SAFE']
-    features: List[Any]
+    # features: List[Any]
 
-
-def prepare_features(features_dict):
-    """Подготовка признаков для модели"""
-    features_df = pd.DataFrame([features_dict])
-
-    expected_features = metadata['feature_names']
-    for feature in expected_features:
-        if feature not in features_df.columns:
-            features_df[feature] = 0  # Заполняем недостающие нулями
-
-    features_df = features_df[expected_features]
-
-    cat_features = metadata.get('cat_features', [])
-    for col in cat_features:
-        if col in features_df.columns:
-            features_df[col] = features_df[col].astype('category')
-
-    return features_df
-
+AllowedModels = Literal['catboost', 'rf', 'lr', 'svm', 'lstm']
 
 def get_risk_level(probability):
     """Определяет уровень риска"""
@@ -71,40 +69,44 @@ def get_risk_level(probability):
     else:
         return "SAFE"
 
+# def get_top_features(features_df, original_features):
+#     """Возвращает топ признаков, повлиявших на решение"""
+#     shap_values = model.get_feature_importance(
+#         data=Pool(features_df, cat_features=metadata.get('cat_features'), text_features=['text']),
+#         type='ShapValues',
+#     )
+#     contributions = shap_values[0, :-1]
 
-def get_top_features(features_df, original_features):
-    """Возвращает топ признаков, повлиявших на решение"""
-    shap_values = model.get_feature_importance(
-        data=Pool(features_df, cat_features=metadata.get('cat_features'), text_features=['text']),
-        type='ShapValues',
-    )
-    contributions = shap_values[0, :-1]
+#     important = []
 
-    important = []
+#     for idx in np.argsort(np.abs(contributions))[-3:][::-1]:
+#         if abs(contributions[idx]) > 1e-6:
+#             important.append(
+#                 f"{metadata['feature_names'][idx]}: {features_df.iloc[0, idx]} (вклад {contributions[idx]:.4f})"
+#             )
 
-    for idx in np.argsort(np.abs(contributions))[-3:][::-1]:
-        if abs(contributions[idx]) > 1e-6:
-            important.append(
-                f"{metadata['feature_names'][idx]}: {features_df.iloc[0, idx]} (вклад {contributions[idx]:.4f})"
-            )
-
-    return important
-
+#     return important
 
 @app.post("/predict", response_model=PredictionResult)
-async def predict(text: str):
-    features = extract_features(text)
-    features_df = prepare_features(features)
+async def predict(text: str, models: list[AllowedModels] = ['catboost', 'rf', 'lr', 'svm', 'lstm']):
+    if len(models) == 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='Необходимо указать хотя бы одну модель',
+            )
+    
+    all_results = []
 
-    prediction = model.predict(features_df)[0]
-    probability = model.predict_proba(features_df)[0][1]
+    for key in models:
+        res = models_functions[key]['predict'](text)
+        all_results.append(res[1])
+
+    probability = sum(all_results) / len(models)
 
     return PredictionResult(
-        is_xss=bool(probability >= THRESHOLD),
+        is_xss=bool(probability >= THRESHLOD_DEFAULT),
         probability=float(probability),
-        prediction=int(prediction),
-        threshold=THRESHOLD,
+        threshold=THRESHLOD_DEFAULT,
         code_sample=text,
         risk_level=get_risk_level(probability),
-        features=get_top_features(features_df, features)
     )

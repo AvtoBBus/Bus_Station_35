@@ -77,9 +77,3 @@ app.include_router(messages_router.router,
                    prefix=config.settings.API_STR,
                    tags=["Сообщения"],
                    )
-
-# app.include_router(food_router.router,
-#                    prefix=config.settings.API_STR,
-#                    tags=["Продукты"],
-#                    dependencies=[Depends(RateLimiter(times=rl_times, seconds=rl_seconds))]
-#                    )
