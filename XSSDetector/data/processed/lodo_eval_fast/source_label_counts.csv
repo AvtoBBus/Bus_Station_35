@@ -1,0 +1,11 @@
+source,benign_or_hard_negative,xss
+capec,363146,0
+csic2010,24108,952
+ecmlpkdd2007,45540,2148
+fwaf,1265917,0
+hard_benign,60,0
+httpparams,30534,532
+kaggle,3531,7306
+modsecurity,34252,280
+payloadbox,0,544
+vulnxss,0,1234

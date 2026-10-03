@@ -1,0 +1,4 @@
+text,label,source
+<svg/onload=alert(1)>,1,src_b
+safe text,0,src_b
+normal message,0,src_b

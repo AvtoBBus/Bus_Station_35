@@ -1,0 +1,6 @@
+source,negative_rows,negative_false_positives,negative_fpr,hard_negative_rows,hard_negative_false_positives,hard_negative_fpr,hard_benign_rows,hard_benign_false_positives,hard_benign_fpr,pr_auc,tpr_at_1pct_fpr
+csic2010,2500,99,0.0396,2500,99,0.0396,0,0,,0.999903843810701,1.0
+ecmlpkdd2007,2500,20,0.008,2500,20,0.008,0,0,,0.9642579976991393,0.8305400372439479
+httpparams,2500,2,0.0008,2500,2,0.0008,0,0,,0.9949304835520766,0.9906015037593985
+kaggle,2500,527,0.2108,0,0,,0,0,,0.9640445201273978,0.6532
+modsecurity,2500,2,0.0008,2500,2,0.0008,0,0,,0.6553339375698514,0.4928571428571429
