@@ -1,0 +1,61 @@
+﻿text
+The guide displays the literal tag <script> as escaped text in a fenced code sample.
+This article explains that onerror is an event attribute name and should be escaped in user content.
+The security note compares javascript: URLs with https links and recommends rejecting the former.
+A code example prints the string <img src=x onerror=alert(1)> after HTML escaping.
+The documentation mentions document.cookie while explaining browser privacy protections.
+The Markdown preview renders <iframe> as plain text inside a code block.
+The parser test confirms that the text alert(1) remains inert when shown in a paragraph.
+A developer asks whether an SVG onload attribute should be encoded in documentation.
+The changelog says the sanitizer removes event handler attributes such as onclick and onerror.
+The HTML lesson includes <script>alert(1)</script> only as an escaped source-code example.
+The guide recommends textContent instead of innerHTML for rendering untrusted comments.
+The CSP documentation lists eval() as a function to avoid in production scripts.
+A support answer explains why <svg onload=alert(1)> must be displayed as text.
+The renderer encodes angle brackets before showing user-submitted HTML examples.
+The help page contains the string javascript: in a warning about unsafe links.
+A code review requests replacing innerHTML with textContent for safe comment rendering.
+The sanitizer documentation lists srcdoc as an attribute requiring validation.
+The browser shows <script src=app.js> as text inside a syntax-highlighted example.
+The checklist says untrusted input must not be copied into onload or onclick attributes.
+The privacy article uses document.cookie as a term in a discussion of browser storage.
+The test fixture stores onload=alert(1) in JSON and never inserts it into a document.
+The escaped sample &lt;script&gt;alert(1)&lt;/script&gt; is displayed literally in the help center.
+The unit test verifies that a comment containing <iframe src=x> is rendered as text.
+The tutorial explains that alert(1) is data when it remains in a quoted text value.
+The reference lists <svg> as an element name in a section about HTML syntax.
+The warning quotes href=javascript: as an unsafe link pattern to reject.
+The safe renderer converts less-than and greater-than characters to entities before display.
+The issue report mentions onclick in a sanitized sample that is not executed.
+The manual explains how Content Security Policy can block inline scripts.
+The code block shows <body onload=alert(1)> only as escaped documentation text.
+The test explains that eval( is a string token and is not evaluated by the application.
+The validator reports an event attribute in a source listing that is never rendered as markup.
+The forum answer recommends textContent when showing the literal word <script>.
+The security test decodes input for inspection but displays the result as inert text.
+The article says javascript:alert(1) is suspicious and must not be navigated to.
+The Markdown renderer escapes <img src=x onerror=alert(1)> before showing the sample.
+The search help explains how to find the term document.cookie without running JavaScript.
+The sanitizer test expects <iframe> and onload to remain escaped in help text.
+The readme discusses eval() and document.cookie as APIs requiring careful handling.
+The source viewer highlights the literal string <script> without creating an element.
+The URL validator rejects a value beginning with javascript: before navigation.
+The example writes the string alert(1) to a log file rather than executing it.
+"The HTML reference describes onclick, onload, and onerror as attribute names."
+The issue asks why escaped markup such as &lt;img&gt; is safer in error messages.
+The textarea test displays <script>alert(1)</script> as user-entered text.
+The discussion describes sanitizing a post containing the terms innerHTML and eval.
+The manual says URL encoding alone does not make a javascript: link safe.
+The paragraph quotes <svg onload=alert(1)> as a string in an escaping example.
+"The documentation index contains onerror from a security article, not executable markup."
+The help center displays <a href=javascript:alert(1)> as escaped text only.
+The template test keeps document.cookie and alert(1) literal after output encoding.
+The example explains that a script tag inside a quoted code block is not executed.
+The sanitizer guide recommends encoding untrusted attributes before rendering HTML.
+The changelog documents a fix that converts raw tags into visible escaped entities.
+The support note explains that an event-handler name in plain text has no browser effect.
+The unit test stores an SVG example in a fixture file and asserts it is output-encoded.
+The docs use the word payload while explaining safe logging of user input.
+The HTML tutorial shows a script element as escaped markup in a documentation page.
+The sample comment contains the phrase javascript protocol but is rendered as plain text.
+The code review notes that untrusted strings should never be interpreted as HTML.
