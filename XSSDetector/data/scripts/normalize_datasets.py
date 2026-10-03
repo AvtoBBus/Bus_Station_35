@@ -2,7 +2,10 @@ import pandas as pd
 import os
 import glob
 import re
+import html
 from typing import Optional
+from urllib.parse import unquote
+from pathlib import Path
 
 # ---------- Вспомогательные утилиты ----------
 def read_txt_lines(filepath: str) -> list:
@@ -10,6 +13,22 @@ def read_txt_lines(filepath: str) -> list:
     with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
         lines = [line.strip() for line in f if line.strip()]
     return lines
+
+
+def _normalize_text_column(series: pd.Series) -> pd.Series:
+    return series.fillna('').astype(str).str.replace(r'\s+', ' ', regex=True).str.strip()
+
+
+def _has_xss_signature(text: str) -> bool:
+    decoded = str(text)
+    for _ in range(2):
+        decoded = html.unescape(unquote(decoded))
+    pattern = r'<\s*(?:script|svg|iframe|img|object|body|video|audio|details)\b|\bon[a-z]{3,}\s*=|\b(?:java|vb)script\s*:|data\s*:\s*text/html|\balert\s*\(|\bdocument\s*\.\s*(?:cookie|domain)|\beval\s*\(|\bexpression\s*\(|\bsrcdoc\s*=|\binnerhtml\b'
+    return bool(re.search(pattern, decoded, re.IGNORECASE))
+
+
+def _find_csv_files(raw_path: str) -> list[str]:
+    return sorted(glob.glob(os.path.join(raw_path, '**', '*.csv'), recursive=True))
 
 # ---------- Нормализаторы по источникам ----------
 
@@ -99,46 +118,24 @@ def normalize_httpparams(raw_path: str) -> pd.DataFrame:
     return df[['text', 'label', 'source']]
 
 def normalize_csic2010(raw_path: str) -> pd.DataFrame:
-    """
-    CSIC 2010 в формате CSV (csic_final.csv).
-    Читает CSV, извлекает текст запроса (URL + тело POST) и метку.
-    """
-    csv_files = glob.glob(os.path.join(raw_path, '*.csv'))
-    if not csv_files:
-        return pd.DataFrame()
-    
-    df = pd.read_csv(csv_files[0])
-    
-    # Проверяем наличие нужных колонок
-    required_cols = ['classification', 'URL', 'content']
-    if not all(col in df.columns for col in required_cols):
-        # Может быть, колонки названы иначе? Попробуем поискать похожие
-        # Если нет, возвращаем пустой DataFrame
-        print("Не найдены колонки classification, URL, content")
-        return pd.DataFrame()
-    
-    # Очищаем от пустых значений
-    df = df.dropna(subset=['URL', 'classification'])
-    
-    # Формируем текст запроса
-    def build_text(row):
-        url = row['URL']
-        content = row['content'] if pd.notna(row['content']) else ''
-        # Для POST-запросов content часто содержит параметры, добавляем их
-        if content.strip():
-            return f"{url} {content}"
-        return url
-    
-    df['text'] = df.apply(build_text, axis=1)
-    
-    # Метка: Normal → 0, Anomalous → 1
-    df['label'] = df['classification'].apply(lambda x: 0 if str(x).strip().lower() == 'normal' else 1)
-    df['source'] = 'csic2010'
-    
-    # Оставляем нужные колонки
-    result = df[['text', 'label', 'source']]
-    
-    return result
+    """Normalize CSIC requests; only XSS-like anomalous requests are positive."""
+    frames = []
+    for csv_file in _find_csv_files(raw_path):
+        df = pd.read_csv(csv_file, low_memory=False)
+        class_col = next((column for column in df.columns if str(column).lower() in {'classification', 'class', 'label'}), None)
+        text_cols = [column for column in ('Method', 'URL', 'content') if column in df.columns]
+        if class_col is None or not text_cols:
+            continue
+        texts = _normalize_text_column(df[text_cols].fillna('').astype(str).agg(' '.join, axis=1))
+        classes = df[class_col].fillna('').astype(str).str.strip().str.lower()
+        normal = classes.isin({'0', 'normal', 'valid', 'benign'})
+        labels = [0 if is_normal else int(_has_xss_signature(value)) for value, is_normal in zip(texts, normal)]
+        frames.append(pd.DataFrame({'text': texts, 'label': labels, 'source': 'csic2010'}))
+    if not frames:
+        return pd.DataFrame(columns=['text', 'label', 'source'])
+    result = pd.concat(frames, ignore_index=True)
+    result = result[result['text'].str.len() > 0]
+    return result.drop_duplicates(subset=['text', 'label']).reset_index(drop=True)
 
 def normalize_fwaf(raw_path: str) -> pd.DataFrame:
     """
@@ -155,79 +152,99 @@ def normalize_fwaf(raw_path: str) -> pd.DataFrame:
     return pd.DataFrame(data)
 
 def normalize_ecmlpkdd2007(raw_path: str) -> pd.DataFrame:
-    """
-    ECML/PKDD 2007: архив с папками, содержащими HTTP-логи.
-    Упрощённо: ищем файлы с расширением .txt, содержащие метки.
-    Если структура неизвестна, возвращаем пустой DataFrame.
-    """
-    # Предположим, что есть файлы с колонками: время, src, dst, метод, URL, код, метка
-    # На практике лучше скачать готовый обработанный CSV.
-    # Возвращаем пустой, чтобы не ломать сборку.
-    return pd.DataFrame()
+    """Normalize ECML/PKDD HTTP records, treating non-XSS attacks as negatives."""
+    frames = []
+    for csv_file in _find_csv_files(raw_path):
+        df = pd.read_csv(csv_file, low_memory=False)
+        class_col = next((column for column in df.columns if str(column).lower() in {'class', 'classification', 'label'}), None)
+        text_cols = [column for column in ('Method', 'URI', 'GET-Query', 'POST-Data', 'URL', 'content') if column in df.columns]
+        if class_col is None or not text_cols:
+            continue
+        texts = _normalize_text_column(df[text_cols].fillna('').astype(str).agg(' '.join, axis=1))
+        classes = df[class_col].fillna('').astype(str).str.strip().str.lower()
+        normal = classes.isin({'valid', 'normal', 'benign', '0'})
+        labels = [0 if is_normal else int(_has_xss_signature(value)) for value, is_normal in zip(texts, normal)]
+        frames.append(pd.DataFrame({'text': texts, 'label': labels, 'source': 'ecmlpkdd2007'}))
+    if not frames:
+        return pd.DataFrame(columns=['text', 'label', 'source'])
+    result = pd.concat(frames, ignore_index=True)
+    result = result[result['text'].str.len() > 0]
+    return result.drop_duplicates(subset=['text', 'label']).reset_index(drop=True)
 
 def normalize_modsecurity(raw_path: str) -> pd.DataFrame:
-    """
-    ModSecurity 30-day dataset: обычно CSV или JSON с полями запроса.
-    Если есть колонка 'request' или 'payload' → label=1.
-    """
-    # Ищем CSV или JSON
-    csv_files = glob.glob(os.path.join(raw_path, '*.csv'))
-    if csv_files:
-        df = pd.read_csv(csv_files[0])
-        # Ищем колонку с текстом запроса
-        text_col = None
-        for col in df.columns:
-            if 'request' in col.lower() or 'payload' in col.lower() or 'query' in col.lower():
-                text_col = col
-                break
-        if text_col is None:
-            return pd.DataFrame()
-        df = df[[text_col]].rename(columns={text_col: 'text'})
-        df['label'] = 1
-        df['source'] = 'modsecurity'
-        return df
-    # Если JSON
-    json_files = glob.glob(os.path.join(raw_path, '*.json'))
-    if json_files:
-        df = pd.read_json(json_files[0])
-        # аналогично ищем колонку
-        text_col = None
-        for col in df.columns:
-            if 'request' in col.lower() or 'payload' in col.lower():
-                text_col = col
-                break
-        if text_col is None:
-            return pd.DataFrame()
-        df = df[[text_col]].rename(columns={text_col: 'text'})
-        df['label'] = 1
-        df['source'] = 'modsecurity'
-        return df
-    return pd.DataFrame()
+    """Parse ModSecurity audit transactions and distinguish CRS XSS from other attack rules."""
+    rows = []
+    marker = re.compile(r'^--.+-([A-Z])--\s*$')
+    rule_id = re.compile(r'\[id "(\d+)"\]')
+    tag_pattern = re.compile(r'\[tag "([^"]+)"\]', re.IGNORECASE)
+    other_prefixes = ('930', '931', '932', '933', '934', '942', '943')
+    attack_tags = ('attack-sqli', 'attack-lfi', 'attack-rce', 'attack-injection')
+
+    for file_path in glob.glob(os.path.join(raw_path, '**', '*.log'), recursive=True):
+        request_lines, message_lines, active_section = [], [], ''
+
+        def save_transaction():
+            if not request_lines or not message_lines:
+                return
+            metadata = '\n'.join(message_lines)
+            ids = rule_id.findall(metadata)
+            tags = [tag.lower() for tag in tag_pattern.findall(metadata)]
+            is_xss = any(value.startswith('941') for value in ids) or any('attack-xss' in tag for tag in tags)
+            is_other_attack = any(value.startswith(other_prefixes) for value in ids) or any(
+                any(name in tag for name in attack_tags) for tag in tags
+            )
+            if is_xss or is_other_attack:
+                request = _normalize_text_column(pd.Series([' '.join(request_lines)])).iloc[0]
+                if request:
+                    rows.append({'text': request, 'label': int(is_xss), 'source': 'modsecurity'})
+
+        with open(file_path, 'r', encoding='utf-8', errors='ignore') as audit_file:
+            for line in audit_file:
+                boundary = marker.match(line.rstrip('\r\n')) if line.startswith('--') else None
+                if boundary:
+                    section = boundary.group(1)
+                    if section == 'Z':
+                        save_transaction()
+                        request_lines, message_lines, active_section = [], [], ''
+                    else:
+                        active_section = section
+                elif active_section == 'B':
+                    request_lines.append(line.strip())
+                elif active_section == 'H':
+                    message_lines.append(line.strip())
+    return pd.DataFrame(rows, columns=['text', 'label', 'source'])
 
 def normalize_capec(raw_path: str) -> pd.DataFrame:
-    """
-    Multi-label CAPEC (Riera et al.): обычно CSV с колонками text и label.
-    Если есть метка 'XSS' → label=1, иначе 0.
-    """
-    csv_files = glob.glob(os.path.join(raw_path, '*.csv'))
-    if not csv_files:
-        return pd.DataFrame()
-    df = pd.read_csv(csv_files[0])
-    # Ищем text и колонку с меткой XSS (может быть несколько колонок)
-    text_col = None
-    xss_col = None
-    for col in df.columns:
-        if 'text' in col.lower() or 'payload' in col.lower():
-            text_col = col
-        if 'xss' in col.lower() or 'attack' in col.lower():
-            xss_col = col
-    if text_col is None or xss_col is None:
-        return pd.DataFrame()
-    df = df[[text_col, xss_col]].rename(columns={text_col: 'text', xss_col: 'label'})
-    df['label'] = df['label'].astype(int)
-    df['source'] = 'capec'
-    return df
-
+    """Load CAPEC multi-label HTTP records as benign/hard negatives unless XSS is explicit."""
+    frames = []
+    for csv_file in _find_csv_files(raw_path):
+        columns = pd.read_csv(csv_file, nrows=0, low_memory=False).columns
+        text_cols = [column for column in (
+            'request_http_method', 'request_http_request', 'request_http_protocol', 'request_body'
+        ) if column in columns]
+        xss_cols = [column for column in columns if re.search(
+            r'xss|cross[- ]site scripting|capec[-_ ]?(591|592)', str(column), re.IGNORECASE
+        )]
+        if not text_cols:
+            continue
+        usecols = list(dict.fromkeys(text_cols + xss_cols))
+        for chunk in pd.read_csv(csv_file, usecols=usecols, chunksize=100000, low_memory=False):
+            texts = _normalize_text_column(chunk[text_cols].fillna('').astype(str).agg(' '.join, axis=1))
+            if xss_cols:
+                def is_positive(value):
+                    try:
+                        return float(value) > 0
+                    except (TypeError, ValueError):
+                        return str(value).strip().lower() in {'true', 'yes', 'xss'}
+                labels = chunk[xss_cols].apply(lambda column: column.map(is_positive)).any(axis=1).astype(int)
+            else:
+                labels = pd.Series(0, index=chunk.index, dtype=int)
+            frame = pd.DataFrame({'text': texts, 'label': labels, 'source': 'capec'})
+            frames.append(frame[frame['text'].str.len() > 0])
+    if not frames:
+        return pd.DataFrame(columns=['text', 'label', 'source'])
+    result = pd.concat(frames, ignore_index=True)
+    return result.drop_duplicates(subset=['text', 'label']).reset_index(drop=True)
 def normalize_hard_benign(raw_path: str) -> pd.DataFrame:
     """
     Трудный benign, собранный вручную.
@@ -252,10 +269,7 @@ def normalize_hard_benign(raw_path: str) -> pd.DataFrame:
 
 # ---------- Главная функция сборки ----------
 def build_unified_dataset(raw_root: str, output_path: str) -> pd.DataFrame:
-    """
-    Обходит все папки в raw_root и применяет соответствующую функцию нормализации.
-    """
-    # Сопоставление имени папки с функцией
+    """Normalize all available raw sources while retaining source provenance."""
     normalizers = {
         'vulnxss': normalize_vulnxss,
         'payloadbox': normalize_payloadbox,
@@ -268,71 +282,132 @@ def build_unified_dataset(raw_root: str, output_path: str) -> pd.DataFrame:
         'capec': normalize_capec,
         'hard_benign': normalize_hard_benign,
     }
-    all_dfs = []
-    for folder_name, func in normalizers.items():
-        folder_path = os.path.join(raw_root, folder_name)
-        if not os.path.exists(folder_path):
-            print(f"Папка {folder_path} не найдена, пропускаем.")
+    frames = []
+    for source, normalizer in normalizers.items():
+        source_path = os.path.join(raw_root, source)
+        if not os.path.isdir(source_path):
+            print(f'Источник {source} не найден, пропускаем.')
             continue
-        print(f"Обработка {folder_name}...")
-        df = func(folder_path)
-        if not df.empty:
-            all_dfs.append(df)
-            print(f"  Добавлено {len(df)} записей.")
-        else:
-            print(f"  Нет данных.")
-    
-    if not all_dfs:
-        raise ValueError("Нет данных ни из одного источника.")
-    
-    unified = pd.concat(all_dfs, ignore_index=True)
-    # Дедупликация по тексту (приводим к нижнему регистру)
-    unified['text_norm'] = unified['text'].str.lower().str.strip()
-    unified = unified.drop_duplicates(subset=['text_norm']).drop(columns=['text_norm'])
-    # Перемешивание
-    unified = unified.sample(frac=1, random_state=42).reset_index(drop=True)
-    # Сохраняем
-    unified.to_csv(output_path, index=False)
-    print(f"Сохранён объединённый датасет: {output_path}")
-    print(f"Всего записей: {len(unified)}")
-    print(f"Классы: XSS={unified[unified.label==1].shape[0]}, Benign={unified[unified.label==0].shape[0]}")
-    print("Распределение по источникам:")
-    print(unified['source'].value_counts())
+        print(f'Обработка {source}...')
+        try:
+            frame = normalizer(source_path)
+        except (OSError, ValueError, pd.errors.ParserError) as error:
+            print(f'  Ошибка чтения источника: {error}')
+            continue
+        if frame.empty:
+            print('  Нет данных.')
+            continue
+        frame = frame[['text', 'label', 'source']].copy()
+        frame['text'] = _normalize_text_column(frame['text'])
+        frame['label'] = pd.to_numeric(frame['label'], errors='coerce')
+        frame = frame.dropna(subset=['text', 'label'])
+        frame = frame[frame['label'].isin([0, 1]) & (frame['text'].str.len() > 0)]
+        frame['label'] = frame['label'].astype(int)
+        frame = frame.sort_values('label', ascending=False).drop_duplicates(subset=['text'])
+        if not frame.empty:
+            frames.append(frame)
+            print(f'  Добавлено {len(frame)} записей.')
+    if not frames:
+        raise ValueError('Нет данных ни из одного источника.')
+
+    unified = pd.concat(frames, ignore_index=True).sample(frac=1, random_state=42).reset_index(drop=True)
+    output = Path(output_path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    unified.to_csv(output, index=False)
+    counts = unified.groupby(['source', 'label']).size().unstack(fill_value=0).reindex(columns=[0, 1], fill_value=0)
+    counts.columns = ['benign_or_hard_negative', 'xss']
+    report_path = output.with_name('source_label_counts.csv')
+    counts.to_csv(report_path)
+    print(f'Сохранён объединённый датасет: {output}')
+    print(f'Отчёт source × label: {report_path}')
+    print(f'Всего записей: {len(unified)}; XSS={int(unified.label.sum())}; Benign/hard-negative={int((unified.label == 0).sum())}')
+    print(counts)
     return unified
 
-
 def balance_dataset(input_path: str, output_path: str, random_seed: int = 42) -> pd.DataFrame:
-    """
-    Создаёт сбалансированный датасет, беря все XSS и такое же количество случайных Benign.
-    """
+    """Keep all minority-class rows and sample an equal, source-diverse negative class."""
     df = pd.read_csv(input_path)
-    
-    # Разделяем на классы
-    xss = df[df['label'] == 1]
-    benign = df[df['label'] == 0]
-    
-    # Берём случайную выборку из benign размером = количеству XSS
-    benign_sampled = benign.sample(n=len(xss), random_state=random_seed)
-    
-    # Объединяем и перемешиваем
-    balanced = pd.concat([xss, benign_sampled], ignore_index=True)
+    required = {'text', 'label', 'source'}
+    missing = required - set(df.columns)
+    if missing:
+        raise ValueError(f'В датасете нет обязательных колонок: {sorted(missing)}')
+
+    class_counts = df['label'].value_counts()
+    if 0 not in class_counts or 1 not in class_counts:
+        raise ValueError('Для балансировки нужны оба класса.')
+    target_count = int(class_counts.min())
+    positives = df[df['label'] == 1]
+    if len(positives) > target_count:
+        positives = positives.sample(n=target_count, random_state=random_seed)
+
+    negatives = df[df['label'] == 0]
+    source_counts = negatives.groupby('source').size().sort_index()
+    quotas = {source: min(int(count), target_count // len(source_counts)) for source, count in source_counts.items()}
+    remaining = target_count - sum(quotas.values())
+    while remaining:
+        progressed = False
+        for source, count in source_counts.items():
+            if quotas[source] < count:
+                quotas[source] += 1
+                remaining -= 1
+                progressed = True
+                if remaining == 0:
+                    break
+        if not progressed:
+            raise ValueError('Недостаточно benign-строк для равной балансировки классов.')
+
+    negative_frames = []
+    for source_index, (source, quota) in enumerate(quotas.items()):
+        if quota:
+            candidates = negatives[negatives['source'] == source]
+            negative_frames.append(candidates.sample(n=quota, random_state=random_seed + source_index + 1))
+    balanced = pd.concat([positives, *negative_frames], ignore_index=True)
     balanced = balanced.sample(frac=1, random_state=random_seed).reset_index(drop=True)
-    
-    # Сохраняем
-    balanced.to_csv(output_path, index=False)
-    
-    print(f"Сбалансированный датасет сохранён: {output_path}")
-    print(f"Всего записей: {len(balanced)}")
-    print(f"XSS: {balanced[balanced.label==1].shape[0]}, Benign: {balanced[balanced.label==0].shape[0]}")
+
+    output = Path(output_path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    balanced.to_csv(output, index=False)
+    counts = balanced.groupby(['source', 'label']).size().unstack(fill_value=0).reindex(columns=[0, 1], fill_value=0)
+    labels = balanced['label'].value_counts().to_dict()
+    print(f'Сбалансированный датасет сохранён: {output}')
+    print(f'Всего записей: {len(balanced)}; XSS={labels.get(1, 0)}; Benign/hard-negative={labels.get(0, 0)}')
+    print('Распределение по source × label:')
+    print(counts)
     return balanced
 
 
-if __name__ == "__main__":
-    build_unified_dataset(
-        raw_root='../raw/',
-        output_path='../processed/unified_dataset.csv'
-    )
-    balanced_df = balance_dataset(
-        input_path='../processed/unified_dataset.csv',
-        output_path='../processed/balanced_unified_dataset.csv'
+def source_capped_dataset(
+    input_path: str,
+    output_path: str,
+    max_rows_per_source_class: int = 45000,
+    random_seed: int = 42,
+) -> pd.DataFrame:
+    """Create a large source-capped sample for class-weighted training."""
+    df = pd.read_csv(input_path)
+    frames = []
+    for group_index, ((source, label), candidates) in enumerate(
+        df.groupby(['source', 'label'], sort=True)
+    ):
+        take = min(len(candidates), max_rows_per_source_class)
+        frames.append(candidates.sample(n=take, random_state=random_seed + group_index))
+    if not frames:
+        raise ValueError('Для source-capped набора нет данных.')
+    result = pd.concat(frames, ignore_index=True).sample(frac=1, random_state=random_seed).reset_index(drop=True)
+    output = Path(output_path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    result.to_csv(output, index=False)
+    print(f'Source-capped набор сохранён: {output}')
+    print(f'Всего записей: {len(result)}; классы: {result.label.value_counts().to_dict()}')
+    return result
+
+
+if __name__ == '__main__':
+    data_dir = Path(__file__).resolve().parent.parent
+    processed_dir = data_dir / 'processed'
+    unified_path = processed_dir / 'unified_dataset.csv'
+    balanced_path = processed_dir / 'balanced_unified_dataset.csv'
+    build_unified_dataset(str(data_dir / 'raw'), str(unified_path))
+    balance_dataset(str(unified_path), str(balanced_path))
+    source_capped_dataset(
+        str(unified_path), str(processed_dir / 'source_capped_unified_dataset.csv')
     )
