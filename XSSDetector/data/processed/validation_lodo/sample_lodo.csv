@@ -1,0 +1,7 @@
+text,label,source
+<script>alert(1)</script>,1,src_a
+<img src=x onerror=alert(1)>,1,src_a
+hello world,0,src_a
+safe text,0,src_b
+<svg/onload=alert(1)>,1,src_b
+normal message,0,src_b
