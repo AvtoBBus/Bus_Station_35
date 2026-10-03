@@ -146,6 +146,14 @@ python adversarial_training.py
 
 ### SHAP-интерпретируемость
 
+Generate the held-out global comparison for CatBoost, RF, LR, and SVM locally from the repository root:
+
+```bash
+.venv/Scripts/python -m xssdetector.generate_shap_report
+```
+
+The comparison is saved to `xssdetector/results/global_shap_heldout.json`. Transformer and LSTM local Integrated Gradients are reported separately because their token attributions are not directly comparable to engineered features.
+
 ```bash
 curl -X POST http://localhost:8001/explain \
   -H "Content-Type: application/json" \
@@ -155,7 +163,13 @@ curl -X POST http://localhost:8001/explain \
 Ответ включает:
 - `decoded_text` — декодированный вход
 - `was_decoded` — изменился ли текст после декодирования
-- `top_features` — топ-5 SHAP-признаков с вкладом
+- `explanation_model` and `explanation_method` identify the selected local explainer; ensemble scores default to CatBoost
+- `top_features` contains signed local SHAP or Integrated Gradients contributions for `explanation_model`
+- `transformer` is an optional `/predict` and `/explain` model; it loads only local checkpoint/tokenizer files and uses Integrated Gradients. The checkpoint is stored through Git LFS; `/predict` and `/explain` return `503` if local weights or the declared `torch`/`transformers` dependencies are unavailable
+- `global_top_features` contains CatBoost mean absolute SHAP values on a fixed sample stratified by source and label
+- `global_sample_size` reports the number of reference rows used
+- `global_diagnostic_model` identifies the model used for global bias diagnostics
+- `bias_warning` is a heuristic for concentration on length/entropy features, not proof of causality
 
 ## API
 

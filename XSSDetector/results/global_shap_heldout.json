@@ -1,0 +1,306 @@
+{
+  "reference_dataset": "datasets_test/xss_dataset.csv",
+  "stratification": [
+    "source",
+    "label"
+  ],
+  "sample_size": 128,
+  "models": {
+    "catboost": {
+      "method": "CatBoost TreeSHAP",
+      "sample_size": 128,
+      "top_features": [
+        {
+          "feature": "url_keywords_evil",
+          "mean_abs_shap": 0.2771242591156435
+        },
+        {
+          "feature": "text",
+          "mean_abs_shap": 0.2504346397014914
+        },
+        {
+          "feature": "js_dom_alert",
+          "mean_abs_shap": 0.10744491894529629
+        },
+        {
+          "feature": "js_max_length",
+          "mean_abs_shap": 0.017094663697599224
+        },
+        {
+          "feature": "url_tag_style",
+          "mean_abs_shap": 0.00012640931855908183
+        },
+        {
+          "feature": "html_attr_href",
+          "mean_abs_shap": 3.3770982089329683e-05
+        },
+        {
+          "feature": "url_attr_src",
+          "mean_abs_shap": 1.3333854456588738e-05
+        },
+        {
+          "feature": "url_number_domain",
+          "mean_abs_shap": 0.0
+        },
+        {
+          "feature": "url_keywords_param",
+          "mean_abs_shap": 0.0
+        },
+        {
+          "feature": "url_attr_data",
+          "mean_abs_shap": 0.0
+        }
+      ],
+      "bias_diagnostic": {
+        "biased": false,
+        "warning": "No strong length/entropy concentration among the five most influential global SHAP features.",
+        "top_features": [
+          {
+            "feature": "url_keywords_evil",
+            "mean_abs_shap": 0.2771242591156435
+          },
+          {
+            "feature": "text",
+            "mean_abs_shap": 0.2504346397014914
+          },
+          {
+            "feature": "js_dom_alert",
+            "mean_abs_shap": 0.10744491894529629
+          },
+          {
+            "feature": "js_max_length",
+            "mean_abs_shap": 0.017094663697599224
+          },
+          {
+            "feature": "url_tag_style",
+            "mean_abs_shap": 0.00012640931855908183
+          }
+        ]
+      }
+    },
+    "rf": {
+      "method": "TreeSHAP",
+      "sample_size": 128,
+      "top_features": [
+        {
+          "feature": "js_dom_alert",
+          "mean_abs_shap": 0.14477622111299362
+        },
+        {
+          "feature": "js_function_calls",
+          "mean_abs_shap": 0.13435308593674591
+        },
+        {
+          "feature": "url_keywords_evil",
+          "mean_abs_shap": 0.1259302497482986
+        },
+        {
+          "feature": "js_max_length",
+          "mean_abs_shap": 0.02649867514119341
+        },
+        {
+          "feature": "html_attr_class",
+          "mean_abs_shap": 0.026326967600299313
+        },
+        {
+          "feature": "url_length",
+          "mean_abs_shap": 0.022372152830473842
+        },
+        {
+          "feature": "html_attr_href",
+          "mean_abs_shap": 0.021009892105929705
+        },
+        {
+          "feature": "html_length",
+          "mean_abs_shap": 0.02046483497223579
+        },
+        {
+          "feature": "js_min_length",
+          "mean_abs_shap": 0.010224271458536082
+        },
+        {
+          "feature": "html_tag_input",
+          "mean_abs_shap": 0.009684411947527272
+        }
+      ],
+      "bias_diagnostic": {
+        "biased": false,
+        "warning": "No strong length/entropy concentration among the five most influential global SHAP features.",
+        "top_features": [
+          {
+            "feature": "js_dom_alert",
+            "mean_abs_shap": 0.14477622111299362
+          },
+          {
+            "feature": "js_function_calls",
+            "mean_abs_shap": 0.13435308593674591
+          },
+          {
+            "feature": "url_keywords_evil",
+            "mean_abs_shap": 0.1259302497482986
+          },
+          {
+            "feature": "js_max_length",
+            "mean_abs_shap": 0.02649867514119341
+          },
+          {
+            "feature": "html_attr_class",
+            "mean_abs_shap": 0.026326967600299313
+          }
+        ]
+      }
+    },
+    "lr": {
+      "method": "LinearSHAP",
+      "sample_size": 128,
+      "top_features": [
+        {
+          "feature": "js_dom_alert",
+          "mean_abs_shap": 3.85085751151966
+        },
+        {
+          "feature": "js_function_calls",
+          "mean_abs_shap": 1.48391205165354
+        },
+        {
+          "feature": "url_keywords_evil",
+          "mean_abs_shap": 1.4709556753057027
+        },
+        {
+          "feature": "html_tag_input",
+          "mean_abs_shap": 0.7707799033023411
+        },
+        {
+          "feature": "html_tag_form",
+          "mean_abs_shap": 0.6781561353688188
+        },
+        {
+          "feature": "url_tag_script",
+          "mean_abs_shap": 0.5178164555073446
+        },
+        {
+          "feature": "html_attr_src",
+          "mean_abs_shap": 0.36055658000888763
+        },
+        {
+          "feature": "url_tag_form",
+          "mean_abs_shap": 0.25947532899540904
+        },
+        {
+          "feature": "html_tag_style",
+          "mean_abs_shap": 0.2311686064099477
+        },
+        {
+          "feature": "url_attr_action",
+          "mean_abs_shap": 0.1925925777696591
+        }
+      ],
+      "bias_diagnostic": {
+        "biased": false,
+        "warning": "No strong length/entropy concentration among the five most influential global SHAP features.",
+        "top_features": [
+          {
+            "feature": "js_dom_alert",
+            "mean_abs_shap": 3.85085751151966
+          },
+          {
+            "feature": "js_function_calls",
+            "mean_abs_shap": 1.48391205165354
+          },
+          {
+            "feature": "url_keywords_evil",
+            "mean_abs_shap": 1.4709556753057027
+          },
+          {
+            "feature": "html_tag_input",
+            "mean_abs_shap": 0.7707799033023411
+          },
+          {
+            "feature": "html_tag_form",
+            "mean_abs_shap": 0.6781561353688188
+          }
+        ]
+      }
+    },
+    "svm": {
+      "method": "KernelSHAP",
+      "sample_size": 128,
+      "top_features": [
+        {
+          "feature": "js_dom_alert",
+          "mean_abs_shap": 0.27424753784825945
+        },
+        {
+          "feature": "url_keywords_evil",
+          "mean_abs_shap": 0.05523250913430211
+        },
+        {
+          "feature": "js_function_calls",
+          "mean_abs_shap": 0.03378851510825944
+        },
+        {
+          "feature": "html_tag_form",
+          "mean_abs_shap": 0.030648293797203224
+        },
+        {
+          "feature": "html_attr_action",
+          "mean_abs_shap": 0.028396217818206726
+        },
+        {
+          "feature": "url_attr_action",
+          "mean_abs_shap": 0.025754154223642824
+        },
+        {
+          "feature": "html_tag_main",
+          "mean_abs_shap": 0.018267892998870848
+        },
+        {
+          "feature": "url_tag_form",
+          "mean_abs_shap": 0.009925492175560392
+        },
+        {
+          "feature": "html_tag_style",
+          "mean_abs_shap": 0.009623432965525374
+        },
+        {
+          "feature": "url_tag_main",
+          "mean_abs_shap": 0.008819138753895712
+        }
+      ],
+      "bias_diagnostic": {
+        "biased": false,
+        "warning": "No strong length/entropy concentration among the five most influential global SHAP features.",
+        "top_features": [
+          {
+            "feature": "js_dom_alert",
+            "mean_abs_shap": 0.27424753784825945
+          },
+          {
+            "feature": "url_keywords_evil",
+            "mean_abs_shap": 0.05523250913430211
+          },
+          {
+            "feature": "js_function_calls",
+            "mean_abs_shap": 0.03378851510825944
+          },
+          {
+            "feature": "html_tag_form",
+            "mean_abs_shap": 0.030648293797203224
+          },
+          {
+            "feature": "html_attr_action",
+            "mean_abs_shap": 0.028396217818206726
+          }
+        ]
+      }
+    }
+  },
+  "neural_model_status": {
+    "lstm": "Local Integrated Gradients explanations are available; token rankings are not comparable to engineered-feature SHAP.",
+    "transformer": "Local weights and dependencies are present; Transformer global token IG is not included in the engineered-feature comparison."
+  },
+  "notes": [
+    "SHAP values describe model behavior on held-out examples; rankings are not causal proof.",
+    "Transformer and LSTM token IG are local explanations and are not mixed with engineered-feature rankings."
+  ]
+}
