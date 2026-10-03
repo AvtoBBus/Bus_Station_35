@@ -8,7 +8,8 @@ from app.config.logconfig import LOGGING_CONFIG
 from app.routers import message as messages_router
 
 from app.utils.logger import Colors, log_request_info, log_response_info
-from app.utils.db import Base, engine
+from app.models.message import Base
+from app.utils.db import engine
 
 import logging
 from logging.config import dictConfig

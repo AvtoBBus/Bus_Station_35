@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from datetime import datetime
-import requests
+import httpx
 
 
 class MessageService:
@@ -22,8 +22,12 @@ class MessageService:
 
     async def create_message(self, new_message: MessagePostDTO):
 
-        response = requests.request("POST",
-                                    "http://xssdetector:8001/predict?text=" + new_message.Text)
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "http://xssdetector:8001/predict",
+                json={"text": new_message.Text},
+                timeout=30.0,
+            )
 
         prediction_result = response.json()
 

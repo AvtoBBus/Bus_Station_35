@@ -4,6 +4,8 @@ import "./App.css";
 
 import MainImage from "../public/mainImage.jpg";
 
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
+
 type MessageType = {
     UserName: string;
     Text: string;
@@ -28,7 +30,7 @@ export const App = () => {
     };
 
     const fetchData = () => {
-        fetch("http://localhost:8000/api/messages")
+        fetch(`${API_BASE}/api/messages`)
             .then((r) => r.json())
             .then((result) => setMessages(result));
     };
@@ -38,7 +40,7 @@ export const App = () => {
         const body = JSON.parse(JSON.stringify(userComment));
         delete body.Date;
 
-        fetch("http://localhost:8000/api/create", {
+        fetch(`${API_BASE}/api/create`, {
             method: "POST",
             body: JSON.stringify(body),
             headers: { "content-type": "application/json" },
@@ -121,7 +123,7 @@ export const App = () => {
                             <ListGroup.Item key={message.Date + message.Text}>
                                 <Card>
                                     <Card.Header>{message.UserName}</Card.Header>
-                                    <Card.Body>{message.Text}</Card.Body>
+                                    <Card.Body><div dangerouslySetInnerHTML={{__html: message.Text}} /></Card.Body>
                                 </Card>
                             </ListGroup.Item>
                         )
