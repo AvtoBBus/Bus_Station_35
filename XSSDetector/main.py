@@ -13,6 +13,7 @@ try:
         predict_svm,
         predict_lstm,
         predict_transformer,
+        predict_charcnn,
         load_transformer,
         load_random_forest,
         load_logistic_regression,
@@ -41,6 +42,7 @@ except ImportError:  # pragma: no cover
         predict_svm,
         predict_lstm,
         predict_transformer,
+        predict_charcnn,
         load_transformer,
         load_random_forest,
         load_logistic_regression,
@@ -94,6 +96,7 @@ models_functions = {
     'svm': predict_svm,
     'lstm': predict_lstm,
     'transformer': predict_transformer,
+    'charcnn': predict_charcnn,
 }
 
 
@@ -105,7 +108,7 @@ class PredictionResult(BaseModel):
     risk_level: Literal['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'SAFE']
 
 
-AllowedModels = Literal['catboost', 'rf', 'lr', 'svm', 'lstm', 'transformer']
+AllowedModels = Literal['catboost', 'rf', 'lr', 'svm', 'lstm', 'transformer', 'charcnn']
 
 
 class XSSBody(BaseModel):
@@ -120,12 +123,17 @@ def predict_model_probability(model_name: str, text: str) -> float:
     try:
         return float(models_functions[model_name](text)[1])
     except (ImportError, RuntimeError, OSError) as error:
-        if model_name != 'transformer':
+        if model_name not in {'transformer', 'charcnn'}:
             raise
-        logger.exception('Local Transformer model is unavailable')
+        logger.exception('Local sequence model is unavailable')
+        detail = (
+            'Transformer is unavailable locally. Install the declared dependencies and verify its checkpoint files.'
+            if model_name == 'transformer'
+            else 'Char-CNN is unavailable locally. Train evaluate_lodo_complex.py --model charcnn --save-model first.'
+        )
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail='Transformer is unavailable locally. Install the declared dependencies and verify its checkpoint files.',
+            detail=detail,
         ) from error
 
 
@@ -215,6 +223,9 @@ async def explain(body: XSSBody):
             transformer_model, tokenizer, decoded, max_len, top_n=5
         )
         explanation_method = 'Integrated Gradients'
+    elif explanation_model == 'charcnn':
+        top_features = []
+        explanation_method = 'Char-CNN (no local attributions yet)'
     else:
         feature_names = [name for name in metadata['feature_names'] if name != 'text']
         numeric_features = pd.DataFrame([extract_features(decoded, False)]).reindex(

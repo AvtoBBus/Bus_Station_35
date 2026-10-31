@@ -18,7 +18,8 @@ import json
 
 # РџСѓС‚СЊ Рє utils
 sys.path.insert(0, os.path.dirname(__file__))
-from utils.preprocess import decode_recursive
+from pathlib import Path
+from utils.preprocess import preprocess_for_sequence_model
 
 OUTPUT_DIR = "./Transformer"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -38,7 +39,7 @@ def load_and_decode(path: str) -> tuple[list[str], np.ndarray]:
     decoded = []
     n_changed = 0
     for t in texts:
-        d = decode_recursive(t)
+        d = preprocess_for_sequence_model(t)
         if d != t:
             n_changed += 1
         decoded.append(d)
@@ -93,10 +94,13 @@ def main():
     )
 
     # === РўРѕРєРµРЅРёР·Р°С†РёСЏ ===
-    MODEL_NAME = "distilbert-base-uncased"
+    LOCAL_TOKENIZER = Path(__file__).resolve().parent / "Transformer" / "tokenizer"
+    LOCAL_MODEL = Path(__file__).resolve().parent / "Transformer" / "best_model"
     MAX_LEN = 256
 
-    tokenizer = DistilBertTokenizerFast.from_pretrained(MODEL_NAME)
+    tokenizer = DistilBertTokenizerFast.from_pretrained(
+        str(LOCAL_TOKENIZER), local_files_only=True
+    )
 
     def tokenize(examples):
         return tokenizer(examples["text"], truncation=True, padding="max_length", max_length=MAX_LEN)
@@ -112,7 +116,8 @@ def main():
 
     # === РњРѕРґРµР»СЊ ===
     model = DistilBertForSequenceClassification.from_pretrained(
-        MODEL_NAME,
+        str(LOCAL_MODEL),
+        local_files_only=True,
         num_labels=2,
         id2label={0: "NORMAL", 1: "XSS"},
         label2id={"NORMAL": 0, "XSS": 1},
@@ -203,7 +208,7 @@ def main():
 
     model.eval()
     for text, label in evasion_tests:
-        decoded = decode_recursive(text)
+        decoded = preprocess_for_sequence_model(text)
         inputs = tokenizer(decoded, return_tensors="pt", truncation=True, max_length=MAX_LEN)
         with torch.no_grad():
             logits = model(**inputs).logits

@@ -116,19 +116,86 @@ def decode_recursive(text: str) -> str:
     return text
 
 
+_URL_RE = re.compile(r'https?://[^\s\'"<>]+', re.IGNORECASE)
+_NUMBER_RE = re.compile(r'\b\d+\b')
+_SINGLE_STRING_RE = re.compile(r"'(?:\\.|[^'\\])*'")
+_DOUBLE_STRING_RE = re.compile(r'"(?:\\.|[^"\\])*"')
+_EVENT_ATTR_RE = re.compile(r'\bon[a-z][a-z0-9_-]*\s*=', re.IGNORECASE)
+_HTML_TAG_RE = re.compile(r'</?[a-zA-Z][^>]*>')
+_JS_PROTOCOL_RE = re.compile(r'(?:java|vb)script\s*:', re.IGNORECASE)
+_DATA_URI_RE = re.compile(r'data\s*:', re.IGNORECASE)
+_JS_TOKEN_RE = re.compile(
+    r'\b(?:eval|alert|prompt|confirm|document|window|function)\b',
+    re.IGNORECASE,
+)
+
+INJECTION_CONTEXTS = ('html_body', 'attribute', 'js', 'uri')
+
+
+def generalize_tokens(text: str) -> str:
+    """
+    DeepXSS-style token generalization after decoding.
+
+    URLs collapse to `http://website`, digit tokens to `0`,
+    and quoted literals to `param_string`. That removes instance-specific
+    values so a sequence model sees attack structure rather than payload IDs.
+    """
+    if not text:
+        return text
+
+    generalized = _URL_RE.sub('http://website', text)
+    generalized = _SINGLE_STRING_RE.sub('param_string', generalized)
+    generalized = _DOUBLE_STRING_RE.sub('param_string', generalized)
+    generalized = _NUMBER_RE.sub('0', generalized)
+    return generalized
+
+
+def classify_injection_context(text: str) -> str:
+    """
+    Heuristic XSS injection context: HTML body, attribute, JS, or URI.
+
+    This is a cheap extra signal for sequence models, not a full parser.
+    """
+    sample = text or ''
+    if _EVENT_ATTR_RE.search(sample) or re.search(r'\b(?:src|href|style)\s*=', sample, re.IGNORECASE):
+        return 'attribute'
+    if _JS_PROTOCOL_RE.search(sample) or _DATA_URI_RE.search(sample) or sample.lstrip().startswith(('/', '?', '&')):
+        return 'uri'
+    if _HTML_TAG_RE.search(sample):
+        return 'html_body'
+    if _JS_TOKEN_RE.search(sample) or '(' in sample:
+        return 'js'
+    return 'html_body'
+
+
+def context_one_hot(context: str) -> list[float]:
+    """Return a stable 4-dim one-hot vector for injection context."""
+    return [1.0 if context == name else 0.0 for name in INJECTION_CONTEXTS]
+
+
+def preprocess_for_sequence_model(text: str) -> str:
+    """Decode obfuscation, then generalize tokens for CNN/LSTM/transformer input."""
+    return generalize_tokens(decode_recursive(text or ''))
+
+
 def preprocess_input(text: str) -> dict:
     """
     Полный препроцессинг входа.
-    
+
     Returns:
         dict с ключами:
         - 'original': исходный текст
         - 'decoded': декодированный текст
+        - 'generalized': decoded + DeepXSS token generalization
         - 'was_decoded': изменился ли текст после декодирования
+        - 'injection_context': html_body | attribute | js | uri
     """
     decoded = decode_recursive(text)
+    generalized = generalize_tokens(decoded)
     return {
         'original': text,
         'decoded': decoded,
+        'generalized': generalized,
         'was_decoded': text != decoded,
+        'injection_context': classify_injection_context(decoded),
     }

@@ -5,7 +5,12 @@ import numpy as np
 import pandas as pd
 from tensorflow import keras
 from .extract_features import extract_features
-from .preprocess import decode_recursive
+from .preprocess import (
+    classify_injection_context,
+    context_one_hot,
+    decode_recursive,
+    preprocess_for_sequence_model,
+)
 from catboost import CatBoostClassifier, Pool
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -16,6 +21,7 @@ MODEL_DIR = {
     'svm': BASE_DIR / 'SVM',
     'lstm': BASE_DIR / 'LSTM',
     'transformer': BASE_DIR / 'Transformer',
+    'charcnn': BASE_DIR / 'CharCNN',
 }
 
 THRESHOLD_DEFAULT = 0.35
@@ -37,6 +43,8 @@ _lstm_max_len = 200
 _transformer_model = None
 _transformer_tokenizer = None
 _transformer_max_len = 256
+_charcnn_model = None
+_charcnn_max_len = 256
 
 
 def _ensure_catboost():
@@ -115,6 +123,37 @@ def _ensure_transformer():
 
 def load_transformer():
     return _ensure_transformer(), _transformer_max_len
+
+
+def _ensure_charcnn():
+    global _charcnn_model, _charcnn_max_len
+    if _charcnn_model is None:
+        import json
+
+        charcnn_dir = MODEL_DIR['charcnn']
+        model_path = charcnn_dir / 'charcnn_xss.keras'
+        if not model_path.is_file():
+            raise FileNotFoundError(f'Local char-CNN weights not found: {model_path}')
+        config_path = charcnn_dir / 'charcnn_config.json'
+        if config_path.is_file():
+            config = json.loads(config_path.read_text(encoding='utf-8'))
+            _charcnn_max_len = int(config.get('max_len', 256))
+        _charcnn_model = keras.models.load_model(str(model_path))
+    return _charcnn_model
+
+
+def predict_charcnn(code, threshold=THRESHOLD_DEFAULT):
+    from .char_sequence import encode_texts
+
+    model = _ensure_charcnn()
+    prepared = preprocess_for_sequence_model(code)
+    tokens = encode_texts([prepared], max_len=_charcnn_max_len)
+    context = np.asarray(
+        [context_one_hot(classify_injection_context(prepared))],
+        dtype=np.float32,
+    )
+    proba = float(model.predict([tokens, context], verbose=0)[0, 0])
+    return proba >= threshold, proba
 
 
 def load_catboost():
@@ -252,4 +291,9 @@ def warm_up_models():
         print('  Transformer ready')
     except Exception as error:
         print(f'  Transformer unavailable: {error}')
+    try:
+        _ensure_charcnn()
+        print('  Char-CNN ready')
+    except Exception as error:
+        print(f'  Char-CNN unavailable: {error}')
     print('✅ се модели загружены')
