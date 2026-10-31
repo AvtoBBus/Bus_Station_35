@@ -81,6 +81,37 @@ SHAP уже начат и закомментирован в коде — нуж�
 
 Опционально: **различение по контексту инъекции** (HTML-тело / значение атрибута / JS-контекст / URI). В XSS-only постановке это можно сделать полноценным вкладом — именно контекст определяет эксплуатируемость XSS.
 
+---
+
+#### Статус выполнения 2.4 (итоги)
+
+**Реализовано в коде:**
+
+1. **Препроцессинг (DeepXSS-style):** `xssdetector/utils/preprocess.py` — рекурсивное декодирование (URL/HTML-entity/unicode/hex) + генерализация токенов + классификация контекста инъекции. Тесты — `xssdetector/tests/test_preprocess.py`.
+
+2. **Char-CNN:** `xssdetector/utils/char_cnn.py` (архитектура с ядрами 3/5/7 + контекстные признаки), `xssdetector/utils/char_sequence.py` (символьное кодирование), `xssdetector/train_charcnn.py` (скрипт обучения с нуля), веса — `xssdetector/CharCNN/charcnn_xss.keras`.
+
+3. **BiLSTM:** `xssdetector/train_bilstm_decoded.py` (обучение на декодированных данных), веса — `xssdetector/BiLSTM/bilstm_decoded_model.h5`.
+
+4. **Трансформер (DistilBERT):** `xssdetector/train_transformer.py`, веса — `xssdetector/Transformer/best_model/`.
+
+5. **LODO-оценка:**
+   - Классические модели (CatBoost, RF, LR, SVM) — `xssdetector/evaluate_lodo_classical.py`, результаты — `results/lodo_classical.csv`.
+   - Char-CNN — `xssdetector/evaluate_lodo_complex.py --model charcnn`, результаты — `results/lodo_charcnn.csv`.
+   - Итоговое сравнение — `xssdetector/summary_24.py`, результаты — `results/summary_24.csv`.
+
+**Результаты LODO (среднее по источникам, PR-AUC / TPR@1%FPR / neg_FPR):**
+
+| Модель | PR-AUC | TPR@1%FPR | neg_FPR |
+|--------|--------|-----------|---------|
+| Random Forest | 0.9412 | 0.7487 | 0.0394 |
+| Logistic Regression | 0.8393 | 0.5373 | 0.0706 |
+| SVM | 0.8542 | 0.7098 | 0.3380 |
+| CatBoost | ~0.89 | ~0.63 | ~0.07 |
+| Char-CNN | 0.8069 | 0.4665 | 0.3018 |
+
+**Научный вывод:** на кросс-датасетном протоколе LODO сложные модели (Char-CNN) **не превосходят** классические бейзлайны (Random Forest). Char-CNN показал PR-AUC=0.8069 против 0.9412 у RF, а на источнике `kaggle` буквально развалился (PR-AUC=0.34 из-за переобучения под распределение обучающих данных). Это подтверждает гипотезу из плана: усложнение модели даёт высокие in-distribution метрики, но теряет в кросс-доменном обобщении. Трансформер (DistilBERT) при holdout-оценке также показал низкие метрики (PR-AUC=0.48 на csic2010), что согласуется с литературой о потерях точности трансформеров при кросс-доменном переносе.
+
 ### 2.5. Сравнение с OWASP Core Rule Set (бейзлайн)
 
 Это и нужный бейзлайн, и мост к Разделу 3.

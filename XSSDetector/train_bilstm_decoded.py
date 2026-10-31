@@ -30,7 +30,7 @@ import sys
 
 # Добавляем путь к utils
 sys.path.insert(0, os.path.dirname(__file__))
-from utils.preprocess import decode_recursive
+from utils.preprocess import decode_recursive, preprocess_for_sequence_model
 
 
 OUTPUT_DIR = "./BiLSTM"
@@ -50,7 +50,7 @@ def load_and_decode_dataset(path: str) -> tuple[np.ndarray, np.ndarray]:
     decoded_texts = []
     n_decoded = 0
     for text in texts:
-        decoded = decode_recursive(str(text))
+        decoded = preprocess_for_sequence_model(str(text))
         if decoded != str(text):
             n_decoded += 1
         decoded_texts.append(decoded)
