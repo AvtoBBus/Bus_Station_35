@@ -275,7 +275,7 @@ def predict_transformer(code, threshold=THRESHOLD_DEFAULT):
 
 def warm_up_models():
     """редзагрузка всех моделей при старте приложения."""
-    print('⏳ агрузка моделей...')
+    print('⏳ Загрузка моделей...')
     _ensure_catboost()
     print('  ✅ CatBoost')
     _ensure_rf()
@@ -288,12 +288,12 @@ def warm_up_models():
     print('  ✅ LSTM')
     try:
         _ensure_transformer()
-        print('  Transformer ready')
+        print('  ✅ Transformer ready')
     except Exception as error:
         print(f'  Transformer unavailable: {error}')
     try:
         _ensure_charcnn()
-        print('  Char-CNN ready')
+        print('  ✅ Char-CNN ready')
     except Exception as error:
         print(f'  Char-CNN unavailable: {error}')
-    print('✅ се модели загружены')
+    print('✅ Все модели загружены')

@@ -49,12 +49,14 @@ services:
             - ./server:/server
         working_dir: /server
         environment:
-            DATABASE_URL: mysql+aiomysql://root:root@mysql:3306/new_schema
-            DB_HOST: mysql
-            DB_PORT: 3306
-            DB_USER: "root"
-            DB_PASSWORD: "root"
-            DB_NAME: "new_schema"
+            APP_DATABASE_URL: mysql+aiomysql://root:root@mysql:3306/new_schema
+            APP_DB_HOST: mysql
+            APP_DB_PORT: 3306
+            APP_DB_USER: "root"
+            APP_DB_PASSWORD: "root"
+            APP_DB_NAME: "new_schema"
+        env_file:
+            - ./server/.env
         depends_on:
             mysql:
                 condition: service_healthy
@@ -79,6 +81,25 @@ services:
         depends_on:
             - fastapi
             - xssdetector
+            - modsecurity
+
+    modsecurity:
+        image: owasp/modsecurity-crs:nginx
+        container_name: modsecurity_crs
+        restart: unless-stopped
+        ports:
+            - "8080:8080"
+        volumes:
+            - ./modsecurity/modsecurity.conf:/etc/modsecurity.d/modsecurity.conf:ro
+            - ./modsecurity/crs-setup.conf:/etc/modsecurity.d/crs-setup.conf:ro
+        environment:
+            - PARANOIA_LEVEL=1
+            - ANOMALY_INBOUND=5
+            - MODSEC_RULE_SET=OWASP_CRS
+        networks:
+            - app-network
+        depends_on:
+            - fastapi
 volumes:
     mysql_data:
 
