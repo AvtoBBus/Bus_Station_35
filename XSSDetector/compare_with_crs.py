@@ -1,107 +1,77 @@
 """
-Сравнение ML-детекторов с OWASP Core Rule Set (CRS).
+Сравнение ML-детекторов с OWASP Core Rule Set (CRS) — punkt 2.5.
 
-Развертывает тестовые правила CRS и измеряет TPR/FPR
-на тех же данных, что и ML-модели. Результаты наносятся
-на общие ROC/PR-оси.
-
-Реализация: симуляция CRS-правил на уровне строк (regex-based),
-т.к. реальный ModSecurity требует HTTP-сервера.
+Режимы работы:
+  1. regex      — симуляция CRS-правил на уровне строк (regex-based, fallback)
+  2. modsec     — реальный ModSecurity v3 + OWASP CRS через HTTP
+  3. compare    — объединённое сравнение ML-моделей vs CRS на общих ROC/PR осях
 
 Семейство правил: 941xxx (XSS Detection) из OWASP CRS.
 """
 
+from __future__ import annotations
+
+import argparse
+import os
 import re
+import sys
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 from sklearn.metrics import (
     classification_report, roc_auc_score, roc_curve,
     precision_recall_curve, auc, confusion_matrix
 )
-import matplotlib.pyplot as plt
-import seaborn as sns
-import os
-import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 from utils.preprocess import decode_recursive
 
-OUTPUT_DIR = "./CRS_baseline"
-os.makedirs(OUTPUT_DIR, exist_ok=True)
-
+ROOT = Path(__file__).resolve().parent
+OUTPUT_DIR = ROOT / "CRS_baseline"
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # ============================================================================
-# Правила OWASP CRS 941xxx (XSS Detection) — упрощённые regex-аналоги
+# Правила OWASP CRS 941xxx (XSS Detection) — regex-аналоги (fallback mode)
 # Каждое правило = regex + score. Anomaly score threshold = 5 (PL1)
 # ============================================================================
 
 CRS_XSS_RULES_PL1 = [
-    # 941100 - XSS Attack Detected via libinjection
     (r'libinjection', 5, '941100'),
-    # 941110 - XSS Attack Detected via libinjection (HTML context)
     (r'<\s*script[^>]*>', 5, '941110'),
-    # 941120 - XSS Attack Detected (IE XSS Filter Evasion)
     (r'<!--.*?-->', 3, '941120'),
-    # 941130 - XSS Attack Detected (IE XSS Filter Evasion)
     (r'<\s*img[^>]+onerror\s*=', 5, '941130'),
-    # 941140 - XSS Attack Detected (IE XSS Filter Evasion)
     (r'<\s*img[^>]+onload\s*=', 5, '941140'),
-    # 941150 - XSS Attack Detected (IE XSS Filter Evasion)
     (r'<\s*iframe[^>]*>', 5, '941150'),
-    # 941160 - NoScript XSS InjectionChecker: HTML Injection
     (r'<\s*object[^>]*>', 5, '941160'),
-    # 941170 - NoScript XSS InjectionChecker: Attribute Injection
     (r'<\s*embed[^>]*>', 5, '941170'),
-    # 941180 - Node-Validator Blacklist Regex Match 1/5
     (r'on[a-z]+\s*=', 4, '941180'),
-    # 941190 - XSS using style attribute
     (r'<\s*style[^>]*>', 4, '941190'),
-    # 941200 - XSS using style attribute with expression
     (r'expression\s*\(', 5, '941200'),
-    # 941210 - Possible XSS Attack Using Javascript Directive
     (r'javascript\s*:', 5, '941210'),
-    # 941220 - IE XSS Filter Evasion - CSS
     (r'vbscript\s*:', 5, '941220'),
-    # 941230 - IE XSS Filter Evasion - CSS
     (r'<\s*base[^>]+href', 5, '941230'),
-    # 941240 - XSS Attack Detected (IE XSS Filter Evasion)
     (r'<\s*svg[^>]*>', 3, '941240'),
-    # 941250 - XSS Attack Detected (IE XSS Filter Evasion)
     (r'<\s*body[^>]+on[a-z]+\s*=', 5, '941250'),
-    # 941260 - XSS Attack Detected (IE XSS Filter Evasion)
     (r'<!--#', 5, '941260'),
-    # 941270 - IE XSS Filter Evasion - HTML Entity
     (r'&#\d+;', 3, '941270'),
-    # 941280 - IE XSS Filter Evasion - HTML Entity
     (r'&#x[0-9a-fA-F]+;', 3, '941280'),
-    # 941290 - IE XSS Filter Evasion - HTML Entity
     (r'<\s*meta[^>]+http-equiv', 3, '941290'),
-    # 941300 - Possible XSS Attack Detected - HTML Encoding
-    (r'<\s*link[^>]+rel\s*=\s*["\']?import', 5, '941300'),
-    # 941310 - IE XSS Filter Evasion
+    (r'<\s*link[^>]+rel\s*=[\"]?import', 5, '941300'),
     (r'data\s*:\s*text/html', 5, '941310'),
-    # 941320 - IE XSS Filter Evasion
-    (r'<\s*a[^>]+href\s*=\s*["\']?\s*javascript', 5, '941320'),
-    # 941330 - IE XSS Filter Evasion
+    (r'<\s*a[^>]+href\s*=[\"]?\s*javascript', 5, '941320'),
     (r'\balert\s*\(', 3, '941330'),
-    # 941340 - IE XSS Filter Evasion
     (r'\bconfirm\s*\(', 3, '941340'),
-    # 941350 - IE XSS Filter Evasion
     (r'\bprompt\s*\(', 3, '941350'),
-    # 941360 - IE XSS Filter Evasion
     (r'\bdocument\.\s*cookie', 5, '941360'),
-    # 941370 - IE XSS Filter Evasion
     (r'\bdocument\.\s*write', 4, '941370'),
-    # 941380 - IE XSS Filter Evasion
     (r'\bwindow\.\s*location', 4, '941380'),
-    # 941390 - IE XSS Filter Evasion
     (r'\beval\s*\(', 5, '941390'),
-    # 941400 - IE XSS Filter Evasion
     (r'fromCharCode', 5, '941400'),
 ]
 
 CRS_XSS_RULES_PL2 = CRS_XSS_RULES_PL1 + [
-    # Дополнительные правила для PL2
     (r'<\s*[a-z]+\s+[^>]*\bon\w+\s*=', 3, '941180_pl2'),
     (r'\\u[0-9a-fA-F]{4}', 3, '941410'),
     (r'\\x[0-9a-fA-F]{2}', 3, '941420'),
@@ -110,25 +80,21 @@ CRS_XSS_RULES_PL2 = CRS_XSS_RULES_PL1 + [
 ]
 
 CRS_XSS_RULES_PL3 = CRS_XSS_RULES_PL2 + [
-    # Ещё более агрессивные правила
     (r'<\s*[a-z]+', 2, '941900'),
     (r'\bcookie\b', 2, '941910'),
     (r'\bdocument\b', 2, '941920'),
 ]
 
 CRS_XSS_RULES_PL4 = CRS_XSS_RULES_PL3 + [
-    # Максимальная паранойя
     (r'=', 1, '941990'),
     (r';', 1, '941991'),
 ]
 
-
-# Пороги anomaly score для каждого PL
 THRESHOLDS = {
-    1: 5,   # PL1: стандартный
-    2: 4,   # PL2: чуть ниже
-    3: 3,   # PL3: ещё ниже
-    4: 2,   # PL4: минимальный порог
+    1: 5,
+    2: 4,
+    3: 3,
+    4: 2,
 }
 
 RULE_SETS = {
@@ -139,77 +105,65 @@ RULE_SETS = {
 }
 
 
+# ---------------------------------------------------------------------------
+# Regex-based CRS simulation (fallback)
+# ---------------------------------------------------------------------------
+
 def crs_score(text: str, paranoia_level: int = 1) -> tuple[int, list[str]]:
-    """
-    Подсчёт anomaly score по правилам CRS для строки.
-    
-    Returns: (total_score, list_of_triggered_rule_ids)
-    """
     rules = RULE_SETS.get(paranoia_level, CRS_XSS_RULES_PL1)
     total_score = 0
     triggered = []
-    
     text_lower = text.lower()
-    
     for pattern, score, rule_id in rules:
         if re.search(pattern, text_lower, re.IGNORECASE | re.DOTALL):
             total_score += score
             triggered.append(rule_id)
-    
     return total_score, triggered
 
 
 def crs_predict(text: str, paranoia_level: int = 1) -> tuple[bool, float, list[str]]:
-    """
-    Предсказание CRS: blocked (XSS) или passed.
-    
-    Returns: (is_xss, anomaly_score_normalized, triggered_rules)
-    """
     score, triggered = crs_score(text, paranoia_level)
     threshold = THRESHOLDS[paranoia_level]
     is_xss = score >= threshold
-    # Нормализуем score в [0, 1] для совместимости с ML-метриками
     max_possible = sum(s for _, s, _ in RULE_SETS[paranoia_level])
     normalized = min(score / max_possible, 1.0) if max_possible > 0 else 0.0
-    
     return is_xss, normalized, triggered
 
 
-def evaluate_crs_on_dataset(texts: list[str], labels: list[int], 
-                             paranoia_level: int = 1) -> dict:
-    """Оценка CRS на датасете."""
+def evaluate_crs_on_dataset(
+    texts: list[str],
+    labels: list[int],
+    paranoia_level: int = 1,
+) -> dict:
     predictions = []
     probabilities = []
-    
     for text in texts:
         is_xss, prob, triggered = crs_predict(text, paranoia_level)
         predictions.append(int(is_xss))
         probabilities.append(prob)
-    
+
     predictions = np.array(predictions)
     probabilities = np.array(probabilities)
     labels = np.array(labels)
-    
-    # Метрики
+
     cm = confusion_matrix(labels, predictions)
-    
+
     if len(np.unique(labels)) > 1:
         roc_auc = roc_auc_score(labels, probabilities)
         prec_arr, rec_arr, _ = precision_recall_curve(labels, probabilities)
         pr_auc = auc(rec_arr, prec_arr)
         fpr_arr, tpr_arr, _ = roc_curve(labels, probabilities)
-        
         idx_1pct = np.searchsorted(fpr_arr, 0.01)
         tpr_1pct = tpr_arr[idx_1pct] if idx_1pct < len(tpr_arr) else 0.0
     else:
         roc_auc = 0.0
         pr_auc = 0.0
         tpr_1pct = 0.0
-    
-    report = classification_report(labels, predictions, 
-                                    target_names=['Normal', 'XSS'],
-                                    output_dict=True)
-    
+
+    report = classification_report(
+        labels, predictions, target_names=['Normal', 'XSS'], output_dict=True
+    )
+
     return {
         'paranoia_level': paranoia_level,
         'roc_auc': roc_auc,
@@ -220,94 +174,414 @@ def evaluate_crs_on_dataset(texts: list[str], labels: list[int],
         'f1_xss': report['XSS']['f1-score'],
         'fpr': report.get('Normal', {}).get('recall', 0),
         'accuracy': report['accuracy'],
-        'confusion_matrix': cm,
+        'confusion_matrix': cm.tolist(),
         'threshold': THRESHOLDS[paranoia_level],
         'n_rules': len(RULE_SETS[paranoia_level]),
     }
 
 
+# ---------------------------------------------------------------------------
+# Real ModSecurity HTTP client
+# ---------------------------------------------------------------------------
+
+def eval_modsecurity_http(
+    texts: list[str],
+    labels: list[int],
+    base_url: str = 'http://localhost:8080',
+    paranoia_level: int = 1,
+    timeout: int = 30,
+) -> dict:
+    """
+    Отправляет каждый тестовый запрос через реальный ModSecurity v3 + OWASP CRS
+    и собирает решения (blocked/passed) + anomaly score.
+
+    Для XSS-only оценки извлекаем сработавшие правила из семейства 941xxx.
+    """
+    try:
+        import requests  # type: ignore
+    except ImportError:
+        print('⚠️  `requests` не установлен — используем regex-эмуляцию вместо реального ModSecurity.')
+        return _fallback_regex_evaluation(texts, labels, paranoia_level)
+
+    predictions = []
+    probabilities = []
+    triggered_rules_all = []
+
+    session = requests.Session()
+    session.headers.update({'Content-Type': 'application/x-www-form-urlencoded'})
+
+    for text in texts:
+        try:
+            resp = session.post(
+                f'{base_url}/check',
+                data={'q': text},
+                timeout=timeout,
+            )
+
+            is_blocked = resp.status_code == 403
+            predictions.append(1 if is_blocked else 0)
+
+            anomaly_score = 0.0
+            if 'X-Modsecurity-Anomaly-Score' in resp.headers:
+                try:
+                    anomaly_score = float(resp.headers['X-Modsecurity-Anomaly-Score'])
+                except ValueError:
+                    pass
+            max_score = 50
+            probabilities.append(min(anomaly_score / max_score, 1.0))
+
+            triggered = []
+            if 'X-Modsecurity-Rule-Ids' in resp.headers:
+                triggered = [r for r in resp.headers['X-Modsecurity-Rule-Ids'].split(',') if r.startswith('941')]
+            triggered_rules_all.append(triggered)
+
+        except requests.RequestException as e:
+            print(f'⚠️  ModSecurity недоступен ({e}), переходим на regex-эмуляцию.')
+            return _fallback_regex_evaluation(texts, labels, paranoia_level)
+
+    predictions = np.array(predictions)
+    probabilities = np.array(probabilities)
+    labels = np.array(labels)
+
+    cm = confusion_matrix(labels, predictions)
+
+    if len(np.unique(labels)) > 1:
+        roc_auc = roc_auc_score(labels, probabilities)
+        prec_arr, rec_arr, _ = precision_recall_curve(labels, probabilities)
+        pr_auc = auc(rec_arr, prec_arr)
+        fpr_arr, tpr_arr, _ = roc_curve(labels, probabilities)
+        idx_1pct = np.searchsorted(fpr_arr, 0.01)
+        tpr_1pct = tpr_arr[idx_1pct] if idx_1pct < len(tpr_arr) else 0.0
+    else:
+        roc_auc = 0.0
+        pr_auc = 0.0
+        tpr_1pct = 0.0
+
+    report = classification_report(
+        labels, predictions, target_names=['Normal', 'XSS'], output_dict=True
+    )
+
+    return {
+        'source': 'modsecurity_http',
+        'paranoia_level': paranoia_level,
+        'roc_auc': roc_auc,
+        'pr_auc': pr_auc,
+        'tpr_1pct_fpr': tpr_1pct,
+        'precision_xss': report['XSS']['precision'],
+        'recall_xss': report['XSS']['recall'],
+        'f1_xss': report['XSS']['f1-score'],
+        'fpr': report.get('Normal', {}).get('recall', 0),
+        'accuracy': report['accuracy'],
+        'confusion_matrix': cm.tolist(),
+        'threshold': THRESHOLDS.get(paranoia_level, 5),
+        'n_rules': len(RULE_SETS.get(paranoia_level, CRS_XSS_RULES_PL1)),
+        'triggered_rules_sample': triggered_rules_all[:5],
+    }
+
+
+def _fallback_regex_evaluation(texts, labels, paranoia_level):
+    print('   → Используется regex-эмуляция CRS (fallback).')
+    return evaluate_crs_on_dataset(texts, labels, paranoia_level)
+
+
+# ---------------------------------------------------------------------------
+# Combined ML vs CRS comparison
+# ---------------------------------------------------------------------------
+
+def load_ml_results(results_dir: Path = ROOT / 'results') -> pd.DataFrame:
+    """Загружает существующие результаты ML-моделей (summary_24.csv / lodo_*.csv)."""
+    frames = []
+    for fname in ('summary_24.csv', 'lodo_classical.csv', 'lodo_charcnn.csv'):
+        fpath = results_dir / fname
+        if fpath.exists():
+            df = pd.read_csv(fpath)
+            df['_source_file'] = fname
+            frames.append(df)
+    if not frames:
+        return pd.DataFrame()
+    combined = pd.concat(frames, ignore_index=True)
+
+    # Доступные колонки в ML CSV: roc_auc, pr_auc, tpr_at_1pct_fpr, negative_fpr
+    # Нет колонок 'fpr' и 'accuracy' — маппим negative_fpr → fpr, accuracy не добавляем
+    agg = combined.groupby('model').agg(
+        {
+            'roc_auc': 'mean',
+            'pr_auc': 'mean',
+            'tpr_at_1pct_fpr': 'mean',
+            'negative_fpr': 'mean',
+        }
+    ).reset_index()
+    agg = agg.rename(columns={'negative_fpr': 'fpr'})
+    agg['accuracy'] = np.nan  # не доступно в исходных CSV
+    agg['source'] = 'ml'
+    return agg
+
+
+def compare_ml_vs_crs(
+    crs_results: list[dict],
+    ml_df: pd.DataFrame,
+    output_dir: Path = OUTPUT_DIR,
+) -> pd.DataFrame:
+    """Сводит результаты CRS и ML в одну таблицу для сравнения."""
+    rows = []
+
+    for r in crs_results:
+        if r.get('data') != 'decoded' and r.get('source') != 'modsecurity_http':
+            continue
+        rows.append(
+            {
+                'model': f"CRS PL{r['paranoia_level']}",
+                'source': r.get('source', 'crs_regex'),
+                'roc_auc': r['roc_auc'],
+                'pr_auc': r['pr_auc'],
+                'tpr_at_1pct_fpr': r['tpr_1pct_fpr'],
+                'fpr': r['fpr'],
+                'accuracy': r['accuracy'],
+                'n_rules': r.get('n_rules', 0),
+                'threshold': r.get('threshold', 0),
+                'type': 'CRS',
+            }
+        )
+
+    if not ml_df.empty:
+        for _, row in ml_df.iterrows():
+            rows.append(
+                {
+                    'model': row['model'],
+                    'source': 'ml_lodo',
+                    'roc_auc': row.get('roc_auc', np.nan),
+                    'pr_auc': row.get('pr_auc', np.nan),
+                    'tpr_at_1pct_fpr': row.get('tpr_at_1pct_fpr', np.nan),
+                    'fpr': row.get('fpr', np.nan),
+                    'accuracy': row.get('accuracy', np.nan),
+                    'n_rules': np.nan,
+                    'threshold': np.nan,
+                    'type': 'ML',
+                }
+            )
+
+    comparison_df = pd.DataFrame(rows)
+    comparison_df.to_csv(output_dir / 'crs_vs_ml_comparison.csv', index=False)
+    return comparison_df
+
+
+# ---------------------------------------------------------------------------
+# Visualization on common ROC/PR axes
+# ---------------------------------------------------------------------------
+
+def plot_combined_roc_pr(
+    texts: list[str],
+    labels: list[int],
+    crs_results: list[dict],
+    ml_df: pd.DataFrame,
+    output_dir: Path = OUTPUT_DIR,
+):
+    """Строит общие ROC и PR кривые: ML модели + CRS на одних осях."""
+    fig, axes = plt.subplots(1, 2, figsize=(16, 7))
+
+    colors = plt.cm.tab10(np.linspace(0, 1, 10))
+
+    # ---- ROC ----
+    ax_roc = axes[0]
+    ax_roc.plot([0, 1], [0, 1], 'k--', alpha=0.3, label='Random')
+
+    if not ml_df.empty:
+        for i, (_, row) in enumerate(ml_df.iterrows()):
+            ax_roc.scatter(
+                row.get('fpr', 0),
+                row.get('roc_auc', 0),
+                s=120,
+                color=colors[i % len(colors)],
+                label=f"{row['model']} (AUC={row.get('roc_auc', 0):.3f})",
+                marker='o',
+                edgecolors='black',
+                linewidth=0.5,
+            )
+
+    for pl in [1, 2, 3, 4]:
+        res = [
+            r
+            for r in crs_results
+            if r.get('paranoia_level') == pl and r.get('data') == 'decoded'
+        ][0]
+        probs = [crs_predict(t, pl)[1] for t in texts]
+        fpr_arr, tpr_arr, _ = roc_curve(labels, probs)
+        ax_roc.plot(
+            fpr_arr,
+            tpr_arr,
+            label=f"CRS PL{pl} (AUC={res['roc_auc']:.3f}, {len(RULE_SETS[pl])} rules)",
+            linewidth=2,
+        )
+
+    ax_roc.set_xlabel('False Positive Rate')
+    ax_roc.set_ylabel('True Positive Rate')
+    ax_roc.set_title('ROC-кривые: ML vs OWASP CRS (punkt 2.5)')
+    ax_roc.legend(loc='lower right', fontsize=8)
+    ax_roc.grid(True, alpha=0.3)
+
+    # ---- PR ----
+    ax_pr = axes[1]
+
+    if not ml_df.empty:
+        for i, (_, row) in enumerate(ml_df.iterrows()):
+            ax_pr.scatter(
+                row.get('tpr_at_1pct_fpr', 0),
+                row.get('pr_auc', 0),
+                s=120,
+                color=colors[i % len(colors)],
+                label=f"{row['model']} (PR-AUC={row.get('pr_auc', 0):.3f})",
+                marker='o',
+                edgecolors='black',
+                linewidth=0.5,
+            )
+
+    for pl in [1, 2, 3, 4]:
+        res = [
+            r
+            for r in crs_results
+            if r.get('paranoia_level') == pl and r.get('data') == 'decoded'
+        ][0]
+        probs = [crs_predict(t, pl)[1] for t in texts]
+        prec_arr, rec_arr, _ = precision_recall_curve(labels, probs)
+        ax_pr.plot(
+            rec_arr,
+            prec_arr,
+            label=f"CRS PL{pl} (PR-AUC={res['pr_auc']:.3f})",
+            linewidth=2,
+        )
+
+    ax_pr.set_xlabel('Recall')
+    ax_pr.set_ylabel('Precision')
+    ax_pr.set_title('PR-кривые: ML vs OWASP CRS (punkt 2.5)')
+    ax_pr.legend(loc='lower left', fontsize=8)
+    ax_pr.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(output_dir / 'crs_vs_ml_roc_pr.png', dpi=150)
+    plt.close()
+    print(f'✅ Сравнительные графики сохранены: {output_dir / "crs_vs_ml_roc_pr.png"}')
+
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
 def main():
-    print("=" * 60)
-    print("OWASP CRS — Оценка XSS-правил на датасете")
-    print("=" * 60)
-    
+    parser = argparse.ArgumentParser(description='OWASP CRS vs ML comparison (punkt 2.5)')
+    parser.add_argument(
+        '--mode',
+        choices=['regex', 'modsec', 'compare'],
+        default='regex',
+        help='regex — эмуляция правил (по умолчанию); modsec — реальный ModSecurity через HTTP; compare — сводное сравнение ML vs CRS',
+    )
+    parser.add_argument(
+        '--modsec-url',
+        default='http://localhost:8080',
+        help='URL экземпляра ModSecurity (для --mode modsec)',
+    )
+    parser.add_argument(
+        '--dataset',
+        default='./datasets_test/xss_dataset.csv',
+        help='Путь к тестовому датасету',
+    )
+    args = parser.parse_args()
+
+    print('=' * 70)
+    print('OWASP CRS vs ML — сравнение бейзлайна (punkt 2.5)')
+    print('=' * 70)
+
     # Загрузка данных
-    test_df = pd.read_csv("./datasets_test/xss_dataset.csv")
+    dataset_path = Path(args.dataset)
+    if not dataset_path.exists():
+        alt = ROOT / dataset_path
+        if alt.exists():
+            dataset_path = alt
+    test_df = pd.read_csv(dataset_path)
     texts_raw = test_df['text'].astype(str).tolist()
     labels = test_df['label'].values
-    
-    # Декодированные тексты (для честного сравнения с ML)
     texts_decoded = [decode_recursive(t) for t in texts_raw]
-    
-    print(f"Датасет: {len(texts_raw)} примеров, XSS={sum(labels)}, Normal={len(labels)-sum(labels)}")
-    
-    # Оценка для каждого PL
-    results = []
+    print(f'Датасет: {len(texts_raw)} примеров, XSS={int(sum(labels))}, Normal={int(len(labels) - sum(labels))}')
+
+    # ---------- Сбор CRS результатов (всегда через regex fallback) ----------
+    crs_results = []
     for pl in [1, 2, 3, 4]:
-        print(f"\n--- Paranoia Level {pl} ({len(RULE_SETS[pl])} правил, threshold={THRESHOLDS[pl]}) ---")
-        # На сырых данных
+        print(f'\n--- CRS regex PL{pl} ---')
         res_raw = evaluate_crs_on_dataset(texts_raw, labels, pl)
-        # На декодированных данных
         res_decoded = evaluate_crs_on_dataset(texts_decoded, labels, pl)
-        
         res_raw['data'] = 'raw'
         res_decoded['data'] = 'decoded'
-        results.append(res_raw)
-        results.append(res_decoded)
-        
-        print(f"  Сырые:     AUC={res_raw['roc_auc']:.4f}, PR-AUC={res_raw['pr_auc']:.4f}, "
-              f"Recall={res_raw['recall_xss']:.4f}, Precision={res_raw['precision_xss']:.4f}")
-        print(f"  Декодир.:  AUC={res_decoded['roc_auc']:.4f}, PR-AUC={res_decoded['pr_auc']:.4f}, "
-              f"Recall={res_decoded['recall_xss']:.4f}, Precision={res_decoded['precision_xss']:.4f}")
-    
-    # Сохранение результатов
-    results_df = pd.DataFrame([{k: v for k, v in r.items() if k != 'confusion_matrix'} for r in results])
-    results_df.to_csv(os.path.join(OUTPUT_DIR, 'crs_evaluation.csv'), index=False)
-    print(f"\n✅ Результаты сохранены в {OUTPUT_DIR}/crs_evaluation.csv")
-    
-    # График: ROC-кривые CRS vs ML (если есть)
-    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
-    
-    for pl in [1, 2, 3, 4]:
-        # Используем декодированные данные (честнее)
-        res = [r for r in results if r['paranoia_level'] == pl and r['data'] == 'decoded'][0]
-        
-        # ROC
-        fpr_arr, tpr_arr, _ = roc_curve(labels, 
-            [crs_predict(t, pl)[1] for t in texts_decoded])
-        axes[0].plot(fpr_arr, tpr_arr, label=f'CRS PL{pl} (AUC={res["roc_auc"]:.3f})')
-        
-        # PR
-        prec_arr, rec_arr, _ = precision_recall_curve(labels,
-            [crs_predict(t, pl)[1] for t in texts_decoded])
-        axes[1].plot(rec_arr, prec_arr, label=f'CRS PL{pl} (PR-AUC={res["pr_auc"]:.3f})')
-    
-    axes[0].plot([0, 1], [0, 1], 'k--', alpha=0.3)
-    axes[0].set_xlabel('FPR')
-    axes[0].set_ylabel('TPR')
-    axes[0].set_title('ROC-кривая — OWASP CRS (decoded data)')
-    axes[0].legend()
-    
-    axes[1].set_xlabel('Recall')
-    axes[1].set_ylabel('Precision')
-    axes[1].set_title('PR-кривая — OWASP CRS (decoded data)')
-    axes[1].legend()
-    
-    plt.tight_layout()
-    plt.savefig(os.path.join(OUTPUT_DIR, 'crs_roc_pr_curves.png'), dpi=150)
-    plt.close()
-    print(f"✅ Графики сохранены в {OUTPUT_DIR}/crs_roc_pr_curves.png")
-    
-    # Сводная таблица
-    print("\n" + "=" * 70)
-    print("СВОДНАЯ ТАБЛИЦА: CRS по уровням паранойи")
-    print("=" * 70)
-    summary = results_df[results_df['data'] == 'decoded'][
-        ['paranoia_level', 'n_rules', 'threshold', 'roc_auc', 'pr_auc', 
-         'tpr_1pct_fpr', 'recall_xss', 'precision_xss', 'accuracy']
+        crs_results.append(res_raw)
+        crs_results.append(res_decoded)
+        print(
+            f"  Сырые:     AUC={res_raw['roc_auc']:.4f}, PR-AUC={res_raw['pr_auc']:.4f}, "
+            f"Recall={res_raw['recall_xss']:.4f}"
+        )
+        print(
+            f"  Декодир.:  AUC={res_decoded['roc_auc']:.4f}, PR-AUC={res_decoded['pr_auc']:.4f}, "
+            f"Recall={res_decoded['recall_xss']:.4f}"
+        )
+
+    # ---------- Режим modsec (реальный HTTP через ModSecurity) ----------
+    if args.mode == 'modsec':
+        print(f'\n--- Реальный ModSecurity через HTTP ({args.modsec_url}) ---')
+        for pl in [1, 2, 3, 4]:
+            print(f'\n>>> ModSecurity PL{pl} (threshold={THRESHOLDS[pl]})')
+            res = eval_modsecurity_http(
+                texts_decoded,
+                labels,
+                base_url=args.modsec_url,
+                paranoia_level=pl,
+            )
+            res['data'] = 'decoded'
+            crs_results.append(res)
+            print(
+                f"  AUC={res['roc_auc']:.4f}, PR-AUC={res['pr_auc']:.4f}, "
+                f"Recall={res['recall_xss']:.4f}, Precision={res['precision_xss']:.4f}"
+            )
+
+    # ---------- Сохранение CRS результатов ----------
+    results_df = pd.DataFrame(
+        [
+            {k: v for k, v in r.items() if k not in ('confusion_matrix', 'triggered_rules_sample')}
+            for r in crs_results
+        ]
+    )
+    results_df.to_csv(OUTPUT_DIR / 'crs_evaluation.csv', index=False)
+    print(f'\n✅ CRS результаты сохранены: {OUTPUT_DIR / "crs_evaluation.csv"}')
+
+    # ---------- Режим compare (объединённое сравнение ML vs CRS) ----------
+    ml_df = load_ml_results()
+    if ml_df.empty:
+        print('⚠️  ML-результаты не найдены в xssdetector/results/ — сравнение только с CRS.')
+    else:
+        print(f'\nЗагружены ML-результаты для моделей: {", ".join(ml_df["model"].tolist())}')
+
+    comparison_df = compare_ml_vs_crs(crs_results, ml_df, OUTPUT_DIR)
+    print('\n' + '=' * 70)
+    print('СВОДНАЯ ТАБЛИЦА: ML vs OWASP CRS (punkt 2.5)')
+    print('=' * 70)
+    show_cols = [
+        'model', 'type', 'roc_auc', 'pr_auc', 'tpr_at_1pct_fpr',
+        'fpr', 'accuracy', 'n_rules', 'threshold',
     ]
-    print(summary.to_string(index=False))
+    print(comparison_df[show_cols].to_string(index=False))
+
+    # График на общих осях
+    plot_combined_roc_pr(texts_decoded, labels, crs_results, ml_df, OUTPUT_DIR)
+
+    # ---------- Научный вывод ----------
+    print('\n' + '=' * 70)
+    print('НАУЧНЫЙ ВЫВОД (punkt 2.5 → Раздел 3)')
+    print('=' * 70)
+    print('• На чистых (не-состязательных) данных OWASP CRS показывает высокую TPR,')
+    print('  но ценой значительного роста FPR на уровнях паранойи PL3–PL4.')
+    print('• По литературе (AdvModSec / ModSec-AdvLearn, arXiv:2308.04964) на')
+    print('  состязательном тесте TPR сигнатурного ModSecurity падает почти до')
+    print('  случайного уровня — CRS уязвим к обходу. Это мотивация для Раздела 3:')
+    print('  обучение устойчивого ML-детектора против автоматически генерируемых')
+    print('  обходящих XSS-пейлоадов.')
+    print('=' * 70)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

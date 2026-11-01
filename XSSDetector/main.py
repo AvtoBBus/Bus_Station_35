@@ -168,9 +168,7 @@ class ExplanationResult(BaseModel):
 @app.post('/explain', response_model=ExplanationResult)
 async def explain(body: XSSBody):
     decoded = decode_recursive(body.text)
-    model_keys = body.models if body.models else [
-        'catboost', 'rf', 'lr', 'svm', 'lstm'
-    ]
+    model_keys = body.models if body.models else ['catboost', 'rf', 'lr', 'svm', 'lstm', 'transformer', 'charcnn']
 
     all_probabilities = []
     for key in model_keys:
@@ -287,13 +285,11 @@ async def explain(body: XSSBody):
 
 @app.post('/predict', response_model=PredictionResult)
 async def predict(body: XSSBody):
-    model_keys = body.models if body.models else [
-        'catboost', 'rf', 'lr', 'svm', 'lstm'
-    ]
+    model_keys = body.models if body.models else ['catboost', 'rf', 'lr', 'svm', 'lstm', 'transformer', 'charcnn']
     if len(model_keys) == 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='еобходимо указать хотя бы одну модель',
+            detail='Необходимо указать хотя бы одну модель',
         )
 
     all_probabilities = []
