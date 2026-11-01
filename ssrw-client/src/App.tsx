@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button, Card, Form, ListGroup, Toast, ToastContainer } from "react-bootstrap";
 import "./App.css";
 
@@ -22,6 +22,7 @@ export const App = () => {
     const [messages, setMessages] = useState<MessageType[]>([]);
     const [error, setError] = useState<string | null>(null);
     const [userComment, setUserComment] = useState<MessageType>(userMessageInit);
+    const inputCommentRef = useRef<HTMLTextAreaElement>(null);
 
     const updateComment = (newText: string) => {
         const copy = JSON.parse(JSON.stringify(userComment)) as MessageType;
@@ -32,7 +33,8 @@ export const App = () => {
     const fetchData = () => {
         fetch(`${API_BASE}/api/messages`)
             .then((r) => r.json())
-            .then((result) => setMessages(result));
+            .then((result) => setMessages(result))
+            .finally(() => inputCommentRef.current?.focus());
     };
 
     const sendComment = (e: React.SubmitEvent<HTMLFormElement>) => {
@@ -57,13 +59,7 @@ export const App = () => {
             });
     };
 
-    useEffect(() => {
-        fetchData();
-
-        const inter = setInterval(() => fetchData(), 5000);
-
-        return () => clearInterval(inter);
-    }, []);
+    useEffect(fetchData, []);
 
     return (
         <>
@@ -74,12 +70,6 @@ export const App = () => {
                             <Toast.Header className="error-container__header" closeButton>
                                 Внимание
                             </Toast.Header>
-                            <Toast.Body>
-                                {error}
-                                <br />
-                                <br />
-                                {"*сделаешь так ещё раз мы тебя забаним)"}
-                            </Toast.Body>
                         </Toast>
                     </ToastContainer>
                 </>
@@ -130,9 +120,15 @@ export const App = () => {
                     )}
                 </ListGroup>
                 <Card.Footer>
-                    <Form onSubmit={(e) => sendComment(e)} key={userComment.Text}>
+                    <Form onSubmit={(e) => sendComment(e)}>
                         <Form.Label>Напишите свой комментарий</Form.Label>
-                        <Form.Control as="textarea" onChange={(e) => updateComment(e.target.value)} value={userComment.Text}/>
+                        <Form.Control
+                            defaultValue={""}
+                            ref={inputCommentRef}
+                            as="textarea"
+                            onChange={(e) => updateComment(e.target.value)}
+                            value={userComment.Text}
+                        />
                         <Button type="submit" className="send-button" disabled={!!error || !userComment.Text}>
                             Отправить
                         </Button>
