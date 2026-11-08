@@ -1,4 +1,6 @@
 {
-  "max_len": 256,
-  "context_dim": 4
+  "max_len": 64,
+  "context_dim": 4,
+  "embedding_dim": 32,
+  "dropout": 0.3
 }

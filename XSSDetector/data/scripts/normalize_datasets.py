@@ -316,10 +316,10 @@ def normalize_csic2010(raw_path: str) -> pd.DataFrame:
     for csv_file in _find_csv_files(raw_path):
         df = pd.read_csv(csv_file, low_memory=False)
         class_col = next((column for column in df.columns if str(column).lower() in {'classification', 'class', 'label'}), None)
-        text_cols = [column for column in ('Method', 'URL', 'content') if column in df.columns]
+        text_cols = 'content'
         if class_col is None or not text_cols:
             continue
-        texts = _normalize_text_column(df[text_cols].fillna('').astype(str).agg(' '.join, axis=1))
+        texts = _normalize_text_column(df[text_cols].fillna('').astype(str))
         classes = df[class_col].fillna('').astype(str).str.strip().str.lower()
         normal = classes.isin({'0', 'normal', 'valid', 'benign'})
         labels = [0 if is_normal else int(_has_xss_signature(value)) for value, is_normal in zip(texts, normal)]
@@ -349,7 +349,7 @@ def normalize_ecmlpkdd2007(raw_path: str) -> pd.DataFrame:
     for csv_file in _find_csv_files(raw_path):
         df = pd.read_csv(csv_file, low_memory=False)
         class_col = next((column for column in df.columns if str(column).lower() in {'class', 'classification', 'label'}), None)
-        text_cols = [column for column in ('Method', 'URI', 'GET-Query', 'POST-Data', 'URL', 'content') if column in df.columns]
+        text_cols = [column for column in ('POST-Data', 'GET-Query') if column in df.columns]
         if class_col is None or not text_cols:
             continue
         texts = _normalize_text_column(df[text_cols].fillna('').astype(str).agg(' '.join, axis=1))

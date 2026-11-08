@@ -29,24 +29,30 @@ def _decode_html_entities(text: str) -> str:
     """Декодирование HTML-entities (< → <, < → <, &#x3C; → <)."""
     return html.unescape(text)
 
-
 def _decode_unicode_escapes(text: str) -> str:
-    """Декодирование Unicode-escape последовательностей (\\u003C → <)."""
-    try:
-        # Обработка \\uXXXX и \\UXXXXXXXX
-        decoded = text.encode('utf-8').decode('unicode_escape')
-        return decoded
-    except (UnicodeDecodeError, UnicodeEncodeError):
-        return text
+    """Безопасное декодирование Unicode-escape последовательностей (\\u003C → <)."""
+    def replace_unicode(match):
+        try:
+            # Берем hex-код после \u или \U и переводим в символ
+            return chr(int(match.group(1), 16))
+        except (ValueError, OverflowError):
+            return match.group(0)
+
+    # Ищем \uXXXX или \UXXXXXXXX
+    return re.sub(r'\\[uU]([0-9a-fA-F]{4,8})', replace_unicode, text)
 
 
 def _decode_hex_escapes(text: str) -> str:
-    """Декодирование hex-escape последовательностей (\\x3C → <)."""
-    try:
-        decoded = text.encode('raw_unicode_escape').decode('unicode_escape')
-        return decoded
-    except (UnicodeDecodeError, UnicodeEncodeError):
-        return text
+    """Безопасное декодирование hex-escape последовательностей (\\x3C → <)."""
+    def replace_hex(match):
+        try:
+            # Берем hex-код после \x
+            return chr(int(match.group(1), 16))
+        except (ValueError, OverflowError):
+            return match.group(0)
+
+    # Ищем \xXX
+    return re.sub(r'\\x([0-9a-fA-F]{2})', replace_hex, text)
 
 
 def _decode_js_charcode(text: str) -> str:
