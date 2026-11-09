@@ -6,6 +6,10 @@
   "attention_dropout": 0.1,
   "dim": 768,
   "dropout": 0.1,
+<<<<<<< HEAD:XSSDetector/ml/artifacts/runs/transformer_20261109_162036/checkpoints/checkpoint-1250/config.json
+=======
+  "dtype": "float32",
+>>>>>>> 1de995f85588390fd9d04f1d78aaf187ba0484af:XSSDetector/Transformer/best_model/config.json
   "hidden_dim": 3072,
   "id2label": {
     "0": "NORMAL",
@@ -28,5 +32,9 @@
   "tie_weights_": true,
   "torch_dtype": "float32",
   "transformers_version": "4.53.0",
+<<<<<<< HEAD:XSSDetector/ml/artifacts/runs/transformer_20261109_162036/checkpoints/checkpoint-1250/config.json
+=======
+  "use_cache": false,
+>>>>>>> 1de995f85588390fd9d04f1d78aaf187ba0484af:XSSDetector/Transformer/best_model/config.json
   "vocab_size": 30522
 }
