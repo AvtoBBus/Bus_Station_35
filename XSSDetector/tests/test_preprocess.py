@@ -8,8 +8,8 @@ for path in (ROOT, XSS_ROOT):
     if path not in sys.path:
         sys.path.insert(0, path)
 
-from xssdetector.utils.char_sequence import VOCAB_SIZE, encode_texts
-from xssdetector.utils.preprocess import (
+from ml.models.char_cnn.sequence import VOCAB_SIZE, encode_texts
+from ml.features.preprocess import (
     classify_injection_context,
     decode_recursive,
     generalize_tokens,

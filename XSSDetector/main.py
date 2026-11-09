@@ -1,78 +1,52 @@
-﻿from fastapi import FastAPI, HTTPException, status
-from fastapi.concurrency import asynccontextmanager
-from fastapi.middleware.cors import CORSMiddleware
-
-from pydantic import BaseModel
+﻿﻿import logging
+import sys
+from pathlib import Path
+from contextlib import asynccontextmanager
+from enum import Enum
 from typing import Literal
 
-try:
-    from xssdetector.utils.load_models import (
-        predict_catboost,
-        predict_rf,
-        predict_lr,
-        predict_svm,
-        predict_lstm,
-        predict_transformer,
-        predict_charcnn,
-        load_transformer,
-        load_random_forest,
-        load_logistic_regression,
-        load_svm,
-        load_lstm,
-        warm_up_models,
-        _ensure_catboost,
-        THRESHOLD_DEFAULT,
-    )
-    from xssdetector.utils.preprocess import decode_recursive
-    from xssdetector.utils.extract_features import extract_features
-    from xssdetector.utils.shap_explainer import (
-        explain_catboost,
-        diagnose_bias,
-        global_feature_importance,
-        load_global_reference_features,
-        explain_tree_model,
-        explain_lstm,
-        explain_transformer,
-    )
-except ImportError:  # pragma: no cover
-    from utils.load_models import (
-        predict_catboost,
-        predict_rf,
-        predict_lr,
-        predict_svm,
-        predict_lstm,
-        predict_transformer,
-        predict_charcnn,
-        load_transformer,
-        load_random_forest,
-        load_logistic_regression,
-        load_svm,
-        load_lstm,
-        warm_up_models,
-        _ensure_catboost,
-        THRESHOLD_DEFAULT,
-    )
-    from utils.preprocess import decode_recursive
-    from utils.extract_features import extract_features
-    from utils.shap_explainer import (
-        explain_catboost,
-        diagnose_bias,
-        global_feature_importance,
-        load_global_reference_features,
-        explain_tree_model,
-        explain_lstm,
-        explain_transformer,
-    )
-
 import pandas as pd
-import logging
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, field_validator
+
+sys.path.append(str(Path(__file__).resolve().parent))
+
+from ml.serving.predictor import model_manager
+from ml.registry.loader import ModelRegistry
+from ml.features.preprocess import decode_recursive
+from ml.features.extract_features import extract_features
+from ml.explainers.explainer import (
+    explain_catboost,
+    diagnose_bias,
+    global_feature_importance,
+    load_global_reference_features,
+    explain_tree_model,
+    explain_lstm,
+    explain_transformer,
+)
 
 logger = logging.getLogger('uvicorn')
+THRESHOLD_DEFAULT = 0.5
 
+try:
+    registry = ModelRegistry()
+    available_models = list(registry.manifest.get("active_models", {}).keys())
+except Exception as e:
+    logger.error(f"Не удалось загрузить manifest.json: {e}")
+    available_models = ["catboost", "random_forest", "logistic_regression", "svm", "lstm", "bilstm", "transformer", "char_cnn"]
+
+AllowedModels = Enum("AllowedModels", {name: name for name in available_models})
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    warm_up_models()
+    logger.info("Прогрев моделей...")
+    try:
+        model_manager.get_model('catboost')
+        model_manager.get_model('random_forest')
+    except Exception as e:
+        logger.warning(f"Ошибка при прогреве: {e}")
+    logger.info("Сервер готов.")
     yield
 
 
@@ -83,21 +57,11 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=['http://localhost:8000', 'http://fastapi:8000'],
+    allow_origins=['http://localhost:8000', 'http://fastapi:8000', 'http://localhost:3000'],
     allow_credentials=True,
     allow_methods=['*'],
     allow_headers=['*'],
 )
-
-models_functions = {
-    'catboost': predict_catboost,
-    'rf': predict_rf,
-    'lr': predict_lr,
-    'svm': predict_svm,
-    'lstm': predict_lstm,
-    'transformer': predict_transformer,
-    'charcnn': predict_charcnn,
-}
 
 
 class PredictionResult(BaseModel):
@@ -108,46 +72,32 @@ class PredictionResult(BaseModel):
     risk_level: Literal['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'SAFE']
 
 
-AllowedModels = Literal['catboost', 'rf', 'lr', 'svm', 'lstm', 'transformer', 'charcnn']
-
-
 class XSSBody(BaseModel):
     text: str
-    models: list[AllowedModels] | None = None
+    models: list[str] | None = None
+
+    @field_validator('models')
+    @classmethod
+    def validate_models(cls, v: list[str] | None) -> list[str] | None:
+        if v is not None:
+            invalid_models = [m for m in v if m not in available_models]
+            if invalid_models:
+                raise ValueError(
+                    f"Неизвестные модели: {invalid_models}. "
+                    f"Доступные: {available_models}"
+                )
+        return v
 
 
 RiskLevel = Literal['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'SAFE']
 
 
-def predict_model_probability(model_name: str, text: str) -> float:
-    try:
-        return float(models_functions[model_name](text)[1])
-    except (ImportError, RuntimeError, OSError) as error:
-        if model_name not in {'transformer', 'charcnn'}:
-            raise
-        logger.exception('Local sequence model is unavailable')
-        detail = (
-            'Transformer is unavailable locally. Install the declared dependencies and verify its checkpoint files.'
-            if model_name == 'transformer'
-            else 'Char-CNN is unavailable locally. Train evaluate_lodo_complex.py --model charcnn --save-model first.'
-        )
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=detail,
-        ) from error
-
-
 def get_risk_level(probability: float) -> RiskLevel:
-    if probability >= 0.8:
-        return 'CRITICAL'
-    elif probability >= 0.6:
-        return 'HIGH'
-    elif probability >= 0.4:
-        return 'MEDIUM'
-    elif probability >= 0.2:
-        return 'LOW'
-    else:
-        return 'SAFE'
+    if probability >= 0.8: return 'CRITICAL'
+    elif probability >= 0.6: return 'HIGH'
+    elif probability >= 0.4: return 'MEDIUM'
+    elif probability >= 0.2: return 'LOW'
+    else: return 'SAFE'
 
 
 class ExplanationResult(BaseModel):
@@ -165,18 +115,51 @@ class ExplanationResult(BaseModel):
     bias_warning: str | None = None
 
 
+@app.post('/predict', response_model=PredictionResult)
+async def predict(body: XSSBody):
+    model_names = [m.value for m in body.models] if body.models else None
+    
+    result = model_manager.predict_ensemble(body.text, model_names=model_names)
+    
+    if "error" in result:
+        raise HTTPException(status_code=500, detail=result["error"])
+
+    prob = result["probability"]
+    
+    return PredictionResult(
+        is_xss=result["is_xss"],
+        probability=prob,
+        threshold=THRESHOLD_DEFAULT,
+        code_sample=body.text,
+        risk_level=get_risk_level(prob),
+    )
+
+
 @app.post('/explain', response_model=ExplanationResult)
 async def explain(body: XSSBody):
     decoded = decode_recursive(body.text)
-    model_keys = body.models if body.models else ['catboost', 'rf', 'lr', 'svm', 'lstm', 'transformer', 'charcnn']
-
-    all_probabilities = []
-    for key in model_keys:
-        proba = predict_model_probability(key, body.text)
-        all_probabilities.append(proba)
-    probability = sum(all_probabilities) / len(all_probabilities)
-
-    model, metadata = _ensure_catboost()
+    
+    # 1. Конвертируем Enum в строки
+    model_names = [m.value for m in body.models] if body.models else None
+    
+    # 2. Предсказание
+    result = model_manager.predict_ensemble(body.text, model_names=model_names)
+    if "error" in result:
+        raise HTTPException(status_code=500, detail=result["error"])
+    
+    probability = result["probability"]
+    
+    # 3. Определяем, какую модель объяснять
+    explanation_model = model_names[0] if model_names and len(model_names) == 1 else 'catboost'
+    
+    # 4. Загружаем CatBoost для глобального объяснения (оно всегда на CatBoost)
+    catboost_adapter = model_manager.get_model('catboost')
+    if not catboost_adapter:
+        raise HTTPException(status_code=503, detail="CatBoost model is not available for explainability")
+    
+    model = catboost_adapter.model
+    metadata = catboost_adapter.metadata
+    
     features_df = pd.DataFrame([extract_features(decoded)])
     expected_features = metadata['feature_names']
     for feature in expected_features:
@@ -189,15 +172,12 @@ async def explain(body: XSSBody):
         if col in features_df.columns:
             features_df[col] = features_df[col].astype('category')
 
+    # Глобальный SHAP
     reference_features = None
     try:
         reference_features = load_global_reference_features(metadata, n_samples=512)
         global_importance = global_feature_importance(
-            model,
-            metadata,
-            reference_features,
-            n_samples=512,
-            top_n=10,
+            model, metadata, reference_features, n_samples=512, top_n=10
         )
         bias_warning = diagnose_bias(global_importance)['warning']
         global_sample_size = len(reference_features)
@@ -207,64 +187,51 @@ async def explain(body: XSSBody):
         bias_warning = 'Global SHAP bias diagnostics are unavailable for the local reference dataset.'
         global_sample_size = 0
 
-    explanation_model = body.models[0] if body.models and len(body.models) == 1 else 'catboost'
+    # 5. Локальное объяснение
     explanation_method = 'CatBoost TreeSHAP'
+    
     if explanation_model == 'catboost':
         top_features = explain_catboost(model, metadata, features_df, top_n=5)
+        
     elif explanation_model == 'lstm':
-        (lstm_model, tokenizer), max_len = load_lstm()
-        top_features = explain_lstm(lstm_model, tokenizer, decoded, max_len, top_n=5)
+        adapter = model_manager.get_model('lstm')
+        top_features = explain_lstm(adapter.model, adapter.tokenizer, decoded, adapter.max_len, top_n=5)
         explanation_method = 'Integrated Gradients'
+        
     elif explanation_model == 'transformer':
-        (transformer_model, tokenizer), max_len = load_transformer()
-        top_features = explain_transformer(
-            transformer_model, tokenizer, decoded, max_len, top_n=5
-        )
+        adapter = model_manager.get_model('transformer')
+        top_features = explain_transformer(adapter.model, adapter.tokenizer, decoded, adapter.max_len, top_n=5)
         explanation_method = 'Integrated Gradients'
-    elif explanation_model == 'charcnn':
+        
+    elif explanation_model == 'char_cnn':
         top_features = []
         explanation_method = 'Char-CNN (no local attributions yet)'
-    else:
+        
+    else: # random_forest, logistic_regression, svm
         feature_names = [name for name in metadata['feature_names'] if name != 'text']
-        numeric_features = pd.DataFrame([extract_features(decoded, False)]).reindex(
-            columns=feature_names, fill_value=0
-        )
+        numeric_features = pd.DataFrame([extract_features(decoded, False)]).reindex(columns=feature_names, fill_value=0)
+        
         background_features = (
-            reference_features.drop(columns=['text'], errors='ignore').reindex(
-                columns=feature_names, fill_value=0
-            )
-            if reference_features is not None
-            else numeric_features
+            reference_features.drop(columns=['text'], errors='ignore').reindex(columns=feature_names, fill_value=0)
+            if reference_features is not None else numeric_features
         )
-        if explanation_model == 'rf':
-            selected_model = load_random_forest()
-            top_features = explain_tree_model(
-                selected_model, numeric_features, background_df=background_features
-            )
+        
+        adapter = model_manager.get_model(explanation_model)
+        if not adapter:
+            raise HTTPException(status_code=503, detail=f"Model {explanation_model} not available")
+            
+        if explanation_model == 'random_forest':
+            top_features = explain_tree_model(adapter.model, numeric_features, background_df=background_features)
             explanation_method = 'TreeSHAP'
-        elif explanation_model == 'lr':
-            selected_model, scaler = load_logistic_regression()
-            numeric_features = pd.DataFrame(
-                scaler.transform(numeric_features), columns=feature_names
-            )
-            background_features = pd.DataFrame(
-                scaler.transform(background_features), columns=feature_names
-            )
-            top_features = explain_tree_model(
-                selected_model, numeric_features, background_df=background_features
-            )
+        elif explanation_model == 'logistic_regression':
+            numeric_features = pd.DataFrame(adapter.scaler.transform(numeric_features), columns=feature_names)
+            background_features = pd.DataFrame(adapter.scaler.transform(background_features), columns=feature_names)
+            top_features = explain_tree_model(adapter.model, numeric_features, background_df=background_features)
             explanation_method = 'LinearSHAP'
         elif explanation_model == 'svm':
-            selected_model, scaler = load_svm()
-            numeric_features = pd.DataFrame(
-                scaler.transform(numeric_features), columns=feature_names
-            )
-            background_features = pd.DataFrame(
-                scaler.transform(background_features), columns=feature_names
-            )
-            top_features = explain_tree_model(
-                selected_model, numeric_features, background_df=background_features
-            )
+            numeric_features = pd.DataFrame(adapter.scaler.transform(numeric_features), columns=feature_names)
+            background_features = pd.DataFrame(adapter.scaler.transform(background_features), columns=feature_names)
+            top_features = explain_tree_model(adapter.model, numeric_features, background_df=background_features)
             explanation_method = 'KernelSHAP'
 
     return ExplanationResult(
@@ -280,29 +247,4 @@ async def explain(body: XSSBody):
         global_top_features=global_importance,
         global_sample_size=global_sample_size,
         bias_warning=bias_warning,
-    )
-
-
-@app.post('/predict', response_model=PredictionResult)
-async def predict(body: XSSBody):
-    model_keys = body.models if body.models else ['catboost', 'rf', 'lr', 'svm', 'lstm', 'transformer', 'charcnn']
-    if len(model_keys) == 0:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Необходимо указать хотя бы одну модель',
-        )
-
-    all_probabilities = []
-    for key in model_keys:
-        proba = predict_model_probability(key, body.text)
-        all_probabilities.append(proba)
-
-    probability = sum(all_probabilities) / len(all_probabilities)
-
-    return PredictionResult(
-        is_xss=bool(probability >= THRESHOLD_DEFAULT),
-        probability=float(probability),
-        threshold=THRESHOLD_DEFAULT,
-        code_sample=body.text,
-        risk_level=get_risk_level(probability),
     )

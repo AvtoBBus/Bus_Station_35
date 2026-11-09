@@ -1,0 +1,6 @@
+artifacts/*
+!artifacts/.gitkeep
+__pycache__/
+*.pyc
+.env
+catboost-info/

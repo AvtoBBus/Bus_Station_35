@@ -15,7 +15,7 @@ for path in (ROOT, XSS_ROOT):
 
 from xssdetector import main as api
 from xssdetector.main import XSSBody, explain
-from xssdetector.utils.shap_explainer import diagnose_bias
+from ml.explainers.explainer import diagnose_bias
 from xssdetector.utils import load_models
 
 

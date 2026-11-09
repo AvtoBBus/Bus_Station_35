@@ -1,0 +1,43 @@
+{
+  "active_models": {
+    "catboost": {
+      "version": "v1.0",
+      "path": "XSSDetector/ml/models/catboost/weights/catboost_xss_model.cbm",
+      "metadata": "XSSDetector/ml/models/catboost/weights/model_metadata.pkl"
+    },
+    "random_forest": {
+      "version": "v1.0",
+      "path": "XSSDetector/ml/models/random_forest/weights/random_forest_xss.pkl"
+    },
+    "logistic_regression": {
+      "version": "v1.0",
+      "path": "XSSDetector/ml/models/logistic_regression/weights/logistic_regression_xss.pkl",
+      "scaler": "XSSDetector/ml/models/logistic_regression/weights/lr_scaler.pkl"
+    },
+    "svm": {
+      "version": "v1.0",
+      "path": "XSSDetector/ml/models/svm/weights/svm_rbf_xss.pkl",
+      "scaler": "XSSDetector/ml/models/svm/weights/svm_scaler.pkl"
+    },
+    "lstm": {
+      "version": "v1.0",
+      "path": "XSSDetector/ml/models/lstm/weights/lstm_xss_model.h5",
+      "tokenizer": "XSSDetector/ml/models/lstm/weights/lstm_tokenizer.pkl"
+    },
+    "bilstm": {
+      "version": "v1.0",
+      "path": "XSSDetector/ml/models/bilstm/weights/bilstm_decoded_model.h5",
+      "tokenizer": "XSSDetector/ml/models/bilstm/weights/bilstm_decoded_tokenizer.pkl"
+    },
+    "transformer": {
+      "version": "v1.0",
+      "path": "XSSDetector/ml/models/transformer/weights/best_model",
+      "tokenizer": "XSSDetector/ml/models/transformer/weights/tokenizer"
+    },
+    "char_cnn": {
+      "version": "v1.0",
+      "path": "XSSDetector/ml/models/char_cnn/weights/charcnn_xss.keras",
+      "config": "XSSDetector/ml/models/char_cnn/weights/charcnn_config.json"
+    }
+  }
+}

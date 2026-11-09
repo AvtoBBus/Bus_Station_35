@@ -1,0 +1,56 @@
+models:
+  catboost:
+    name: "CatBoost"
+    status: "script"
+    legacy_script: "XSSDetector/ml/models/catboost/train.py"
+    artifact_dir: "XSSDetector/CatBoost"
+    artifact_files: ["catboost_xss_model.cbm", "model_metadata.pkl"]
+
+  random_forest:
+    name: "Random Forest"
+    status: "script"
+    legacy_script: "XSSDetector/ml/models/random_forest/train.py"
+    artifact_dir: "XSSDetector/RandomForest"
+    artifact_files: ["random_forest_xss.pkl"]
+
+  logistic_regression:
+    name: "Logistic Regression"
+    status: "script"
+    legacy_script: "XSSDetector/ml/models/logistic_regression/train.py"
+    artifact_dir: "XSSDetector/LogisticRegression"
+    artifact_files: ["logistic_regression_xss.pkl", "lr_scaler.pkl"]
+
+  svm:
+    name: "SVM"
+    status: "script"
+    legacy_script: "XSSDetector/ml/models/svm/train.py"
+    artifact_dir: "XSSDetector/SVM"
+    artifact_files: ["svm_rbf_xss.pkl", "svm_scaler.pkl"]
+
+  lstm:
+    name: "LSTM"
+    status: "script"
+    legacy_script: "XSSDetector/ml/models/lstm/train.py"
+    artifact_dir: "XSSDetector/LSTM"
+    artifact_files: ["lstm_xss_model.h5", "lstm_tokenizer.pkl"]
+
+  bilstm:
+    name: "BiLSTM"
+    status: "script"
+    legacy_script: "XSSDetector/ml/models/bilstm/train.py"
+    artifact_dir: "XSSDetector/BiLSTM"
+    artifact_files: ["bilstm_decoded_model.h5", "bilstm_decoded_tokenizer.pkl"]
+
+  transformer:
+    name: "Transformer"
+    status: "script"
+    legacy_script: "XSSDetector/ml/models/transformer/train.py"
+    artifact_dir: "XSSDetector/Transformer"
+    artifact_files: ["best_model/", "tokenizer/"]
+
+  char_cnn:
+    name: "CharCNN"
+    status: "script"
+    legacy_script: "XSSDetector/ml/models/char_cnn/train.py"
+    artifact_dir: "XSSDetector/CharCNN"
+    artifact_files: ["charcnn_xss.keras", "charcnn_config.json"]

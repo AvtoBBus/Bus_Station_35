@@ -1,0 +1,207 @@
+"""
+Рекурсивное декодирование входных строк для обнаружения XSS.
+
+Применяет цепочку декодирований (URL, HTML-entity, unicode, hex)
+до тех пор, пока строка перестаёт меняться. Это закрывает обходы
+через многослойное кодирование: %253Cscript%253E → %3Cscript%3E → <script>
+
+Референс: DeepXSS (Fang et al., 2018) — рекурсивное декодирование.
+"""
+
+import re
+import html
+import urllib.parse
+
+
+_MAX_DEPTH = 10  # защита от зацикливания
+
+
+def _decode_url_encoding(text: str) -> str:
+    """Декодирование URL-encoding (%XX → символ)."""
+    try:
+        decoded = urllib.parse.unquote_plus(text)
+        return decoded
+    except Exception:
+        return text
+
+
+def _decode_html_entities(text: str) -> str:
+    """Декодирование HTML-entities (< → <, < → <, &#x3C; → <)."""
+    return html.unescape(text)
+
+def _decode_unicode_escapes(text: str) -> str:
+    """Безопасное декодирование Unicode-escape последовательностей (\\u003C → <)."""
+    def replace_unicode(match):
+        try:
+            # Берем hex-код после \u или \U и переводим в символ
+            return chr(int(match.group(1), 16))
+        except (ValueError, OverflowError):
+            return match.group(0)
+
+    # Ищем \uXXXX или \UXXXXXXXX
+    return re.sub(r'\\[uU]([0-9a-fA-F]{4,8})', replace_unicode, text)
+
+
+def _decode_hex_escapes(text: str) -> str:
+    """Безопасное декодирование hex-escape последовательностей (\\x3C → <)."""
+    def replace_hex(match):
+        try:
+            # Берем hex-код после \x
+            return chr(int(match.group(1), 16))
+        except (ValueError, OverflowError):
+            return match.group(0)
+
+    # Ищем \xXX
+    return re.sub(r'\\x([0-9a-fA-F]{2})', replace_hex, text)
+
+
+def _decode_js_charcode(text: str) -> str:
+    """Декодирование String.fromCharCode(...)."""
+    pattern = r'String\.fromCharCode\(([^)]+)\)'
+    
+    def replace_charcode(match):
+        try:
+            codes = match.group(1).split(',')
+            chars = ''.join(chr(int(c.strip())) for c in codes)
+            return chars
+        except (ValueError, TypeError):
+            return match.group(0)
+    
+    return re.sub(pattern, replace_charcode, text, flags=re.IGNORECASE)
+
+
+def _normalize_whitespace(text: str) -> str:
+    """Нормализация пробельных символов (tabs, newlines → пробел)."""
+    return re.sub(r'[\t\n\r]+', ' ', text)
+
+
+def _normalize_case(text: str) -> str:
+    """
+    Нижний регистр для HTML-тегов и атрибутов (кроме содержимого строк).
+    <SCRIPT> → <script>, OnError → onerror
+    """
+    # Нормализуем HTML-теги
+    def lower_tag(match):
+        return match.group(0).lower()
+    
+    return re.sub(r'</?[a-zA-Z][a-zA-Z0-9]*|on[a-zA-Z]+=', lower_tag, text)
+
+
+def decode_recursive(text: str) -> str:
+    """
+    Рекурсивно декодирует строку, пока она продолжает меняться.
+    
+    Порядок декодирования на каждой итерации:
+    1. URL-encoding (%XX)
+    2. HTML-entities (<, <, &#x3C;)
+    3. Unicode-escape (\\uXXXX)
+    4. Hex-escape (\\xXX)
+    5. JS String.fromCharCode
+    
+    После декодирования: нормализация пробелов и регистра.
+    """
+    if not text:
+        return text
+    
+    for _ in range(_MAX_DEPTH):
+        original = text
+        
+        text = _decode_url_encoding(text)
+        text = _decode_html_entities(text)
+        text = _decode_unicode_escapes(text)
+        text = _decode_hex_escapes(text)
+        text = _decode_js_charcode(text)
+        
+        if text == original:
+            break
+    
+    # Финальная нормализация
+    text = _normalize_whitespace(text)
+    text = _normalize_case(text)
+    
+    return text
+
+
+_URL_RE = re.compile(r'https?://[^\s\'"<>]+', re.IGNORECASE)
+_NUMBER_RE = re.compile(r'\b\d+\b')
+_SINGLE_STRING_RE = re.compile(r"'(?:\\.|[^'\\])*'")
+_DOUBLE_STRING_RE = re.compile(r'"(?:\\.|[^"\\])*"')
+_EVENT_ATTR_RE = re.compile(r'\bon[a-z][a-z0-9_-]*\s*=', re.IGNORECASE)
+_HTML_TAG_RE = re.compile(r'</?[a-zA-Z][^>]*>')
+_JS_PROTOCOL_RE = re.compile(r'(?:java|vb)script\s*:', re.IGNORECASE)
+_DATA_URI_RE = re.compile(r'data\s*:', re.IGNORECASE)
+_JS_TOKEN_RE = re.compile(
+    r'\b(?:eval|alert|prompt|confirm|document|window|function)\b',
+    re.IGNORECASE,
+)
+
+INJECTION_CONTEXTS = ('html_body', 'attribute', 'js', 'uri')
+
+
+def generalize_tokens(text: str) -> str:
+    """
+    DeepXSS-style token generalization after decoding.
+
+    URLs collapse to `http://website`, digit tokens to `0`,
+    and quoted literals to `param_string`. That removes instance-specific
+    values so a sequence model sees attack structure rather than payload IDs.
+    """
+    if not text:
+        return text
+
+    generalized = _URL_RE.sub('http://website', text)
+    generalized = _SINGLE_STRING_RE.sub('param_string', generalized)
+    generalized = _DOUBLE_STRING_RE.sub('param_string', generalized)
+    generalized = _NUMBER_RE.sub('0', generalized)
+    return generalized
+
+
+def classify_injection_context(text: str) -> str:
+    """
+    Heuristic XSS injection context: HTML body, attribute, JS, or URI.
+
+    This is a cheap extra signal for sequence models, not a full parser.
+    """
+    sample = text or ''
+    if _EVENT_ATTR_RE.search(sample) or re.search(r'\b(?:src|href|style)\s*=', sample, re.IGNORECASE):
+        return 'attribute'
+    if _JS_PROTOCOL_RE.search(sample) or _DATA_URI_RE.search(sample) or sample.lstrip().startswith(('/', '?', '&')):
+        return 'uri'
+    if _HTML_TAG_RE.search(sample):
+        return 'html_body'
+    if _JS_TOKEN_RE.search(sample) or '(' in sample:
+        return 'js'
+    return 'html_body'
+
+
+def context_one_hot(context: str) -> list[float]:
+    """Return a stable 4-dim one-hot vector for injection context."""
+    return [1.0 if context == name else 0.0 for name in INJECTION_CONTEXTS]
+
+
+def preprocess_for_sequence_model(text: str) -> str:
+    """Decode obfuscation, then generalize tokens for CNN/LSTM/transformer input."""
+    return generalize_tokens(decode_recursive(text or ''))
+
+
+def preprocess_input(text: str) -> dict:
+    """
+    Полный препроцессинг входа.
+
+    Returns:
+        dict с ключами:
+        - 'original': исходный текст
+        - 'decoded': декодированный текст
+        - 'generalized': decoded + DeepXSS token generalization
+        - 'was_decoded': изменился ли текст после декодирования
+        - 'injection_context': html_body | attribute | js | uri
+    """
+    decoded = decode_recursive(text)
+    generalized = generalize_tokens(decoded)
+    return {
+        'original': text,
+        'decoded': decoded,
+        'generalized': generalized,
+        'was_decoded': text != decoded,
+        'injection_context': classify_injection_context(decoded),
+    }
