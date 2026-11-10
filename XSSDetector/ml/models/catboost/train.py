@@ -15,6 +15,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
+from ml.paths import ARTIFACTS_DIR
 from ml.features.extract_features import extract_features
 from config import ModelConfig, DataConfig
 # Импортируем наши новые модули
@@ -76,7 +77,7 @@ def plot_feature_importance(model, X_cols, run_dir):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset", default=DataConfig().dataset_path)
-    parser.add_argument("--artifacts-dir", default="XSSDetector/ml/artifacts")
+    parser.add_argument("--artifacts-dir", default=str(ARTIFACTS_DIR))
     args = parser.parse_args()
 
     model_cfg = ModelConfig()

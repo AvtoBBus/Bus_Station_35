@@ -14,6 +14,7 @@ import torch
 from datasets import Dataset
 from transformers import DistilBertForSequenceClassification, DistilBertTokenizerFast, Trainer, TrainingArguments
 
+from ml.paths import RESULTS_DIR
 from ml.features.preprocess import preprocess_for_sequence_model
 from config import ModelConfig, DataConfig
 # Импорт единого калькулятора
@@ -22,7 +23,7 @@ from ml.training.metrics import calculate_metrics
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset", default=DataConfig().dataset_path)
-    parser.add_argument("--output-dir", default="XSSDetector/results")
+    parser.add_argument("--output-dir", default=str(RESULTS_DIR))
     args = parser.parse_args()
 
     config = ModelConfig()

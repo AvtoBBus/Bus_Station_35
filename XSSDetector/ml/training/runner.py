@@ -2,7 +2,9 @@ import sys
 import subprocess
 from pathlib import Path
 
-def run_training(model_name: str, dataset_path: str = None, artifacts_dir: str = "XSSDetector/ml/artifacts"):
+from ..paths import ARTIFACTS_DIR, RESULTS_DIR
+
+def run_training(model_name: str, dataset_path: str = None, artifacts_dir: str = str(ARTIFACTS_DIR)):
     """
     Центральный оркестратор обучения.
     Вызывает соответствующий скрипт train.py для выбранной модели.
@@ -39,7 +41,7 @@ def run_training(model_name: str, dataset_path: str = None, artifacts_dir: str =
         print(f"❌ Ошибка при обучении {model_name} (код возврата: {result.returncode}).")
         return False
 
-def run_evaluation(model_name: str, dataset_path: str = None, output_dir: str = "XSSDetector/results"):
+def run_evaluation(model_name: str, dataset_path: str = None, output_dir: str = str(RESULTS_DIR)):
     """Запускает LODO-валидацию для модели."""
     base_dir = Path(__file__).resolve().parent.parent
     model_dir = base_dir / "models" / model_name

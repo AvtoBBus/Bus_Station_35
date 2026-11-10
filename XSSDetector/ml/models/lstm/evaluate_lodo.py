@@ -19,6 +19,7 @@ from tensorflow.keras.callbacks import EarlyStopping
 
 from config import ModelConfig, DataConfig
 # Импорт единого калькулятора
+from ml.paths import RESULTS_DIR
 from ml.training.metrics import calculate_metrics
 
 tf.get_logger().setLevel('ERROR')
@@ -26,7 +27,7 @@ tf.get_logger().setLevel('ERROR')
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset", default=DataConfig().dataset_path)
-    parser.add_argument("--output-dir", default="XSSDetector/results")
+    parser.add_argument("--output-dir", default=str(RESULTS_DIR))
     args = parser.parse_args()
 
     model_cfg = ModelConfig()

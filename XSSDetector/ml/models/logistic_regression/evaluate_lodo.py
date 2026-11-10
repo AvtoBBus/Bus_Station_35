@@ -8,6 +8,7 @@ sys.path.append(str(Path(__file__).resolve().parent.parent.parent.parent))
 
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
+from ml.paths import RESULTS_DIR
 from ml.features.extract_features import extract_features
 from config import DataConfig
 # Импорт единого калькулятора
@@ -16,7 +17,7 @@ from ml.training.metrics import calculate_metrics
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset", default=DataConfig().dataset_path)
-    parser.add_argument("--output-dir", default="XSSDetector/results")
+    parser.add_argument("--output-dir", default=str(RESULTS_DIR))
     args = parser.parse_args()
 
     data_cfg = DataConfig()

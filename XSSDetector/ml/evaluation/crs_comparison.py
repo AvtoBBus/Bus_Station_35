@@ -25,6 +25,7 @@ from sklearn.metrics import (
 
 # Добавляем корень проекта в sys.path
 sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
+from ml.paths import ARTIFACTS_DIR, TEST_DATASET
 from ml.features.preprocess import decode_recursive
 # Импортируем наш сборщик метрик из реестра
 from ml.registry.stats import load_all_metrics
@@ -235,8 +236,8 @@ def plot_combined_roc_pr(texts: list[str], labels: list[int], crs_results: list[
 
 def main():
     parser = argparse.ArgumentParser(description='OWASP CRS vs ML comparison (пункт 2.5)')
-    parser.add_argument('--dataset', default='XSSDetector/datasets_test/xss_dataset.csv', help='Путь к тестовому датасету')
-    parser.add_argument('--artifacts-dir', default='XSSDetector/ml/artifacts', help='Путь к метрикам ML-моделей')
+    parser.add_argument('--dataset', default=str(TEST_DATASET), help='Путь к тестовому датасету')
+    parser.add_argument('--artifacts-dir', default=str(ARTIFACTS_DIR), help='Путь к метрикам ML-моделей')
     args = parser.parse_args()
 
     print('=' * 70)

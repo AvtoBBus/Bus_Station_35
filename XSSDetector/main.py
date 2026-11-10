@@ -2,7 +2,6 @@
 import sys
 from pathlib import Path
 from contextlib import asynccontextmanager
-from enum import Enum
 from typing import Literal
 
 import pandas as pd
@@ -35,8 +34,6 @@ try:
 except Exception as e:
     logger.error(f"Не удалось загрузить manifest.json: {e}")
     available_models = ["catboost", "random_forest", "logistic_regression", "svm", "lstm", "bilstm", "transformer", "char_cnn"]
-
-AllowedModels = Enum("AllowedModels", {name: name for name in available_models})
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -89,6 +86,13 @@ class XSSBody(BaseModel):
         return v
 
 
+def _require_adapter(name: str):
+    adapter = model_manager.get_model(name)
+    if adapter is None:
+        raise HTTPException(status_code=503, detail=f"Model {name} not available")
+    return adapter
+
+
 RiskLevel = Literal['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'SAFE']
 
 
@@ -117,7 +121,7 @@ class ExplanationResult(BaseModel):
 
 @app.post('/predict', response_model=PredictionResult)
 async def predict(body: XSSBody):
-    model_names = [m.value for m in body.models] if body.models else None
+    model_names = body.models or None
     
     result = model_manager.predict_ensemble(body.text, model_names=model_names)
     
@@ -139,8 +143,7 @@ async def predict(body: XSSBody):
 async def explain(body: XSSBody):
     decoded = decode_recursive(body.text)
     
-    # 1. Конвертируем Enum в строки
-    model_names = [m.value for m in body.models] if body.models else None
+    model_names = body.models or None
     
     # 2. Предсказание
     result = model_manager.predict_ensemble(body.text, model_names=model_names)
@@ -153,9 +156,7 @@ async def explain(body: XSSBody):
     explanation_model = model_names[0] if model_names and len(model_names) == 1 else 'catboost'
     
     # 4. Загружаем CatBoost для глобального объяснения (оно всегда на CatBoost)
-    catboost_adapter = model_manager.get_model('catboost')
-    if not catboost_adapter:
-        raise HTTPException(status_code=503, detail="CatBoost model is not available for explainability")
+    catboost_adapter = _require_adapter('catboost')
     
     model = catboost_adapter.model
     metadata = catboost_adapter.metadata
@@ -194,12 +195,12 @@ async def explain(body: XSSBody):
         top_features = explain_catboost(model, metadata, features_df, top_n=5)
         
     elif explanation_model == 'lstm':
-        adapter = model_manager.get_model('lstm')
+        adapter = _require_adapter('lstm')
         top_features = explain_lstm(adapter.model, adapter.tokenizer, decoded, adapter.max_len, top_n=5)
         explanation_method = 'Integrated Gradients'
         
     elif explanation_model == 'transformer':
-        adapter = model_manager.get_model('transformer')
+        adapter = _require_adapter('transformer')
         top_features = explain_transformer(adapter.model, adapter.tokenizer, decoded, adapter.max_len, top_n=5)
         explanation_method = 'Integrated Gradients'
         
@@ -216,9 +217,7 @@ async def explain(body: XSSBody):
             if reference_features is not None else numeric_features
         )
         
-        adapter = model_manager.get_model(explanation_model)
-        if not adapter:
-            raise HTTPException(status_code=503, detail=f"Model {explanation_model} not available")
+        adapter = _require_adapter(explanation_model)
             
         if explanation_model == 'random_forest':
             top_features = explain_tree_model(adapter.model, numeric_features, background_df=background_features)

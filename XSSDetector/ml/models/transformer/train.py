@@ -23,6 +23,7 @@ from transformers import (
 from transformers.trainer_utils import EvalPrediction
 from sklearn.metrics import roc_auc_score
 
+from ml.paths import ARTIFACTS_DIR
 from ml.features.preprocess import preprocess_for_sequence_model
 from config import ModelConfig, DataConfig
 
@@ -104,7 +105,7 @@ def extract_hf_history(log_history):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset", default=DataConfig().dataset_path)
-    parser.add_argument("--artifacts-dir", default="XSSDetector/ml/artifacts")
+    parser.add_argument("--artifacts-dir", default=str(ARTIFACTS_DIR))
     args = parser.parse_args()
 
     config = ModelConfig()

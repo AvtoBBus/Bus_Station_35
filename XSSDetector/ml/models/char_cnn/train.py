@@ -16,6 +16,7 @@ sys.path.append(str(Path(__file__).resolve().parent.parent.parent.parent))
 import tensorflow as tf
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
 
+from ml.paths import ARTIFACTS_DIR
 from ml.features.preprocess import preprocess_for_sequence_model, classify_injection_context, context_one_hot, INJECTION_CONTEXTS
 from ml.models.char_cnn.sequence import encode_texts
 from ml.models.char_cnn.architecture import build_char_cnn
@@ -126,7 +127,7 @@ class CharCNNEngine:
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset", default=DataConfig().dataset_path)
-    parser.add_argument("--artifacts-dir", default="XSSDetector/ml/artifacts")
+    parser.add_argument("--artifacts-dir", default=str(ARTIFACTS_DIR))
     args = parser.parse_args()
 
     config = ModelConfig()

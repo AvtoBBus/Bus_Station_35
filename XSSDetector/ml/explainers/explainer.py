@@ -1,4 +1,4 @@
-﻿from functools import lru_cache
+from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
@@ -7,13 +7,10 @@ from catboost import Pool
 
 from ..features.extract_features import extract_features
 from ..features.preprocess import decode_recursive
+from ..paths import TEST_DATASET
 
 _shap = None
-REFERENCE_DATA_PATH = (
-    Path(__file__).resolve().parents[1]
-    / 'datasets_test'
-    / 'xss_dataset.csv'
-)
+REFERENCE_DATA_PATH = TEST_DATASET
 _GLOBAL_IMPORTANCE_CACHE = {}
 
 

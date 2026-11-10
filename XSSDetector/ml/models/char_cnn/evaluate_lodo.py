@@ -12,6 +12,7 @@ sys.path.append(str(Path(__file__).resolve().parent.parent.parent.parent))
 
 from tensorflow.keras.callbacks import EarlyStopping
 
+from ml.paths import RESULTS_DIR
 from ml.features.preprocess import classify_injection_context, context_one_hot, INJECTION_CONTEXTS
 from ml.models.char_cnn.sequence import encode_texts
 from ml.models.char_cnn.architecture import build_char_cnn
@@ -22,7 +23,7 @@ from ml.training.metrics import calculate_metrics
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset", default=DataConfig().dataset_path)
-    parser.add_argument("--output-dir", default="XSSDetector/results")
+    parser.add_argument("--output-dir", default=str(RESULTS_DIR))
     args = parser.parse_args()
 
     config = ModelConfig()

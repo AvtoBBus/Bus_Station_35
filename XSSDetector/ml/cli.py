@@ -1,101 +1,108 @@
 import argparse
 import sys
-import os
+
 import yaml
 
-# Добавляем корень ml в sys.path для импорта внутренних модулей
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from .paths import ARTIFACTS_DIR, ML_ROOT, RESULTS_DIR
+from .registry import run_stats
+from .training import run_adversarial_training, run_evaluation, run_training
 
-from training import run_training, run_evaluation, run_adversarial_training
-from registry import run_stats
+MODELS_CONFIG = ML_ROOT / "config" / "models.yaml"
 
-def load_models_config():
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    config_path = os.path.join(current_dir, "config", "models.yaml")
-    if not os.path.exists(config_path):
-        print(f"Error: Config file not found at {config_path}")
+
+def load_models_config() -> dict:
+    if not MODELS_CONFIG.exists():
+        print(f"Error: Config file not found at {MODELS_CONFIG}", file=sys.stderr)
         sys.exit(1)
-    with open(config_path, "r", encoding="utf-8") as f:
+    with open(MODELS_CONFIG, "r", encoding="utf-8-sig") as f:
         return yaml.safe_load(f)
 
+
+def supported_models() -> list:
+    return list(load_models_config().get("models", {}).keys())
+
+
 def cmd_list_models(args):
-    config = load_models_config()
-    models = config.get("models", {})
+    models = load_models_config().get("models", {})
     print(f"{'Model Name':<20} | {'Status':<15} | {'Legacy Script':<40} | {'Artifacts'}")
     print("-" * 110)
     for key, data in models.items():
         name = data.get("name", key)
         status = data.get("status", "unknown")
-        legacy = data.get("legacy_script")
-        legacy_str = legacy if legacy else "-"
-        artifacts = data.get("artifact_files", [])
-        artifacts_str = ", ".join(artifacts) if artifacts else "none"
-        print(f"{name:<20} | {status:<15} | {legacy_str:<40} | {artifacts_str}")
+        legacy = data.get("legacy_script") or "-"
+        artifacts = ", ".join(data.get("artifact_files", [])) or "none"
+        print(f"{name:<20} | {status:<15} | {legacy:<40} | {artifacts}")
+
+
+def _check_model(name: str) -> bool:
+    if name not in supported_models():
+        print(f"Unknown model '{name}'. Available: {', '.join(supported_models())}", file=sys.stderr)
+        return False
+    return True
+
 
 def cmd_train(args):
-    supported_models = ["catboost", "logistic_regression", "lstm", "random_forest", "svm", "bilstm", "char_cnn", "transformer"]
-    if args.model in supported_models:
-        run_training(args.model, args.dataset, args.artifacts_dir)
-    else:
-        print(f"NOT_IMPLEMENTED: Обучение модели '{args.model}' еще не перенесено в скрипт.")
-        print(f"Доступные для обучения модели: {', '.join(supported_models)}")
+    if args.model == "all":
+        results = {name: run_training(name, args.dataset, args.artifacts_dir) for name in supported_models()}
+        print("\nSummary:")
+        for name, ok in results.items():
+            print(f"  {name:<20} {'OK' if ok else 'FAILED'}")
+        sys.exit(0 if all(results.values()) else 1)
+    if not _check_model(args.model):
+        sys.exit(2)
+    sys.exit(0 if run_training(args.model, args.dataset, args.artifacts_dir) else 1)
+
 
 def cmd_evaluate(args):
-    supported_models = ["catboost", "logistic_regression", "lstm", "random_forest", "svm", "bilstm", "char_cnn", "transformer"]
-    if args.model in supported_models:
-        run_evaluation(args.model, args.dataset, args.output_dir)
-    else:
-        print(f"NOT_IMPLEMENTED: Оценка модели '{args.model}' еще не перенесена.")
+    if not _check_model(args.model):
+        sys.exit(2)
+    sys.exit(0 if run_evaluation(args.model, args.dataset, args.output_dir) else 1)
+
 
 def cmd_adversarial(args):
-    run_adversarial_training()
+    sys.exit(0 if run_adversarial_training() else 1)
+
 
 def cmd_stats(args):
-    # Определяем путь к артефактам относительно текущего файла
-    artifacts_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "artifacts")
     if args.all:
-        run_stats(artifacts_dir, model_name=None, fmt=args.format)
+        run_stats(args.artifacts_dir, model_name=None, fmt=args.format)
     elif args.model:
-        run_stats(artifacts_dir, model_name=args.model, fmt=args.format)
+        run_stats(args.artifacts_dir, model_name=args.model, fmt=args.format)
     else:
-        print("Ошибка: укажите --model <name> или --all")
+        print("Error: specify --model <name> or --all", file=sys.stderr)
+        sys.exit(2)
 
-def main():
-    parser = argparse.ArgumentParser(prog="xssdetector.ml", description="Unified CLI for XSS Detector ML pipeline")
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(prog="python -m ml", description="Unified CLI for XSS Detector ML pipeline")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    # list-models
     subparsers.add_parser("list-models", help="List all available models").set_defaults(func=cmd_list_models)
 
-    # train
-    p_train = subparsers.add_parser("train", help="Train a model")
-    p_train.add_argument("--model", type=str, required=True, help="Model name to train")
-    p_train.add_argument("--dataset", type=str, help="Path to dataset")
-    p_train.add_argument("--artifacts-dir", type=str, default="XSSDetector/ml/artifacts", help="Directory for artifacts")
+    p_train = subparsers.add_parser("train", help="Train a model (or 'all')")
+    p_train.add_argument("--model", required=True, help="Model name or 'all'")
+    p_train.add_argument("--dataset", help="Path to dataset")
+    p_train.add_argument("--artifacts-dir", default=str(ARTIFACTS_DIR), help="Directory for run artifacts")
     p_train.set_defaults(func=cmd_train)
 
-    # evaluate
     p_eval = subparsers.add_parser("evaluate", help="Evaluate a model (LODO)")
-    p_eval.add_argument("--model", type=str, required=True, help="Model name to evaluate")
-    p_eval.add_argument("--dataset", type=str, help="Path to dataset")
-    p_eval.add_argument("--output-dir", type=str, default="XSSDetector/results", help="Directory for LODO results")
+    p_eval.add_argument("--model", required=True, help="Model name to evaluate")
+    p_eval.add_argument("--dataset", help="Path to dataset")
+    p_eval.add_argument("--output-dir", default=str(RESULTS_DIR), help="Directory for LODO results")
     p_eval.set_defaults(func=cmd_evaluate)
 
-    # stats
     p_stats = subparsers.add_parser("stats", help="Show model statistics")
-    p_stats.add_argument("--model", type=str, help="Specific model name")
+    p_stats.add_argument("--model", help="Specific model name")
     p_stats.add_argument("--all", action="store_true", help="Show stats for all models")
-    p_stats.add_argument("--format", type=str, default="table", choices=["table", "json", "csv", "markdown"], help="Output format")
+    p_stats.add_argument("--format", default="table", choices=["table", "json", "csv", "markdown"], help="Output format")
+    p_stats.add_argument("--artifacts-dir", default=str(ARTIFACTS_DIR), help="Directory with runs/")
     p_stats.set_defaults(func=cmd_stats)
 
-    p_adv = subparsers.add_parser("adversarial", help="Run adversarial training for CatBoost")
-    p_adv.set_defaults(func=cmd_adversarial)
+    subparsers.add_parser("adversarial", help="Run adversarial training for CatBoost").set_defaults(func=cmd_adversarial)
 
-    args = parser.parse_args()
-    if hasattr(args, "func"):
-        args.func(args)
-    else:
-        parser.print_help()
+    args = parser.parse_args(argv)
+    args.func(args)
+
 
 if __name__ == "__main__":
     main()

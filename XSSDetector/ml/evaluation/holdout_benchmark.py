@@ -5,6 +5,7 @@ import numpy as np
 from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
+from ml.paths import RESULTS_DIR, BALANCED_DATASET
 from ml.datasets.scripts.normalize_datasets import build_lodo_splits, _sample_by_class
 from ml.registry.loader import ModelRegistry
 from ml.serving.predictor import model_manager
@@ -13,9 +14,9 @@ from ml.evaluation.advanced_metrics import compute_source_metrics
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dataset', default='XSSDetector/data/processed/balanced_unified_dataset.csv')
+    parser.add_argument('--dataset', default=str(BALANCED_DATASET))
     parser.add_argument('--models', nargs='+', default=['catboost', 'transformer'])
-    parser.add_argument('--output-dir', default='XSSDetector/results')
+    parser.add_argument('--output-dir', default=str(RESULTS_DIR))
     args = parser.parse_args()
 
     splits = build_lodo_splits(args.dataset, None)

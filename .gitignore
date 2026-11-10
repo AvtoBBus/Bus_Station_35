@@ -1,1 +1,7 @@
-catboost-info/
+__pycache__/
+*.pyc
+.env
+catboost_info/
+ml/artifacts/runs/
+!ml/artifacts/.gitkeep
+ml/datasets/interim/cache_wp/

@@ -21,6 +21,7 @@ from sklearn.model_selection import train_test_split
 
 from config import ModelConfig, DataConfig
 # Импортируем общие модули
+from ml.paths import ARTIFACTS_DIR
 from ml.training.metrics import calculate_metrics, save_metrics_json, save_standard_plots
 from ml.training.artifacts import create_run_directory
 
@@ -29,7 +30,7 @@ tf.get_logger().setLevel('ERROR')
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset", default=DataConfig().dataset_path)
-    parser.add_argument("--artifacts-dir", default="XSSDetector/ml/artifacts")
+    parser.add_argument("--artifacts-dir", default=str(ARTIFACTS_DIR))
     args = parser.parse_args()
 
     model_cfg = ModelConfig()

@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from pathlib import Path
+from ml.paths import UNIFIED_DATASET
 
 @dataclass
 class ModelConfig:
@@ -24,6 +25,6 @@ class ModelConfig:
 
 @dataclass
 class DataConfig:
-    dataset_path: str = "XSSDetector/ml/datasets/processed/unified_dataset.csv"
+    dataset_path: str = str(UNIFIED_DATASET)
     text_column: str = "text"
     label_column: str = "label"

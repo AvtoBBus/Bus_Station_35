@@ -20,6 +20,7 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 from tensorflow.keras.preprocessing.text import Tokenizer
 
+from ml.paths import ARTIFACTS_DIR
 from ml.features.preprocess import preprocess_for_sequence_model
 from config import ModelConfig, DataConfig
 
@@ -146,7 +147,7 @@ class BiLSTMEngine:
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset", default=DataConfig().dataset_path)
-    parser.add_argument("--artifacts-dir", default="XSSDetector/ml/artifacts")
+    parser.add_argument("--artifacts-dir", default=str(ARTIFACTS_DIR))
     args = parser.parse_args()
 
     config = ModelConfig()
