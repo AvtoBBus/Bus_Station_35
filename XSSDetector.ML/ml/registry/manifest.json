@@ -1,0 +1,43 @@
+{
+  "active_models": {
+    "catboost": {
+      "version": "v1.0",
+      "path": "models/catboost/weights/catboost_xss_model.cbm",
+      "metadata": "models/catboost/weights/model_metadata.pkl"
+    },
+    "random_forest": {
+      "version": "v1.0",
+      "path": "models/random_forest/weights/random_forest_xss.pkl"
+    },
+    "logistic_regression": {
+      "version": "v1.0",
+      "path": "models/logistic_regression/weights/logistic_regression_xss.pkl",
+      "scaler": "models/logistic_regression/weights/lr_scaler.pkl"
+    },
+    "svm": {
+      "version": "v1.0",
+      "path": "models/svm/weights/svm_rbf_xss.pkl",
+      "scaler": "models/svm/weights/svm_scaler.pkl"
+    },
+    "lstm": {
+      "version": "v1.0",
+      "path": "models/lstm/weights/lstm_xss_model.h5",
+      "tokenizer": "models/lstm/weights/lstm_tokenizer.pkl"
+    },
+    "bilstm": {
+      "version": "v1.0",
+      "path": "models/bilstm/weights/bilstm_decoded_model.h5",
+      "tokenizer": "models/bilstm/weights/bilstm_decoded_tokenizer.pkl"
+    },
+    "transformer": {
+      "version": "v1.0",
+      "path": "models/transformer/weights/best_model",
+      "tokenizer": "models/transformer/weights/tokenizer"
+    },
+    "char_cnn": {
+      "version": "v1.0",
+      "path": "models/char_cnn/weights/charcnn_xss.keras",
+      "config": "models/char_cnn/weights/charcnn_config.json"
+    }
+  }
+}

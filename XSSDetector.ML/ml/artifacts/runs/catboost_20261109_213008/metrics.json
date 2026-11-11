@@ -1,0 +1,21 @@
+{
+    "accuracy": 0.999415878148306,
+    "precision": 0.9935864978902954,
+    "recall": 0.9714521452145215,
+    "f1_score": 0.9823946599916562,
+    "roc_auc": 0.9995550435124939,
+    "pr_auc": 0.9947464531422349,
+    "tpr_at_1pct_fpr": 0.9948844884488449,
+    "confusion_matrix": [
+        [
+            355128,
+            38
+        ],
+        [
+            173,
+            5887
+        ]
+    ],
+    "model": "catboost",
+    "dataset": "XSSDetector/ml/datasets/processed/unified_dataset.csv"
+}

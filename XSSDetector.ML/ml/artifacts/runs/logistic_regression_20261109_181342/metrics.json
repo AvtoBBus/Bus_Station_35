@@ -1,0 +1,21 @@
+{
+    "accuracy": 0.9961353833887926,
+    "precision": 0.9072651065316102,
+    "recall": 0.8572607260726073,
+    "f1_score": 0.8815543865603258,
+    "roc_auc": 0.9874045677037478,
+    "pr_auc": 0.922667409655494,
+    "tpr_at_1pct_fpr": 0.9455445544554455,
+    "confusion_matrix": [
+        [
+            354635,
+            531
+        ],
+        [
+            865,
+            5195
+        ]
+    ],
+    "model": "logistic_regression",
+    "dataset": "XSSDetector/ml/datasets/processed/unified_dataset.csv"
+}

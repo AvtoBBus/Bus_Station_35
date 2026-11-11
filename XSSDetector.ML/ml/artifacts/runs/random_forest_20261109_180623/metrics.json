@@ -1,0 +1,21 @@
+{
+    "accuracy": 0.9980510815943482,
+    "precision": 0.9942783314876338,
+    "recall": 0.888943894389439,
+    "f1_score": 0.9386652726955915,
+    "roc_auc": 0.998549885537649,
+    "pr_auc": 0.9818883159295401,
+    "tpr_at_1pct_fpr": 0.9854785478547855,
+    "confusion_matrix": [
+        [
+            355135,
+            31
+        ],
+        [
+            673,
+            5387
+        ]
+    ],
+    "model": "random_forest",
+    "dataset": "XSSDetector/ml/datasets/processed/unified_dataset.csv"
+}

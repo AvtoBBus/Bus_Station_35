@@ -1,0 +1,38 @@
+# Всё, что не нужно внутри образа. Главная цель — не отправлять в контекст
+# сборки ~3.4 ГБ данных (датасеты и артефакты обучения).
+
+# Данные и результаты обучения
+ml/datasets/
+ml/artifacts/runs/
+results/
+catboost_info/
+
+# Тесты и документация
+tests/
+ml/tests/
+docs/
+ml/docs/
+*.md
+
+# Python-мусор
+__pycache__/
+*.py[cod]
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Окружения и IDE
+.venv/
+venv/
+env/
+.idea/
+.vscode/
+
+# Git и локальные файлы
+.git/
+.gitignore
+.gitattributes
+*.log
+*.prompt
+.DS_Store

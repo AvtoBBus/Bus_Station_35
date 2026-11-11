@@ -1,32 +1,43 @@
-# Зависимости
-node_modules
-npm-debug.log
-package-lock.json
-yarn.lock
-yarn-error.log
-.pnpm-store
-pnpm-lock.yaml
+# Всё, что не нужно внутри образа. Главная цель — не отправлять в контекст
+# сборки ~3.4 ГБ данных (датасеты и артефакты обучения).
 
-# Сборка
-build
-dist
-.env
-.env.local
-.env.*.local
+# Данные и результаты обучения
+ml/datasets/
+ml/artifacts/runs/
+results/
+catboost_info/
 
-# Git
-.git
+# Чекпоинты обучения (не нужны для инференса; Transformer: ~2.5 ГБ)
+ml/models/**/checkpoints/
+**/checkpoint-*/
+**/optimizer.pt
+
+# Тесты и документация
+tests/
+ml/tests/
+docs/
+ml/docs/
+*.md
+
+# Python-мусор
+__pycache__/
+*.py[cod]
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Окружения и IDE
+.venv/
+venv/
+env/
+.idea/
+.vscode/
+
+# Git и локальные файлы
+.git/
 .gitignore
-
-# IDE
-.vscode
-.idea
-*.swp
-*.swo
-*~
+.gitattributes
+*.log
+*.prompt
 .DS_Store
-
-# Docker
-Dockerfile
-.dockerignore
-docker-compose*.yml

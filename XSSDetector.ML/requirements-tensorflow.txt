@@ -1,0 +1,5 @@
+# TensorFlow нужен для LSTM, BiLSTM и Char-CNN.
+# Ставится в образ только при INSTALL_TENSORFLOW=true.
+tensorflow==2.21.0
+# transformers (подключается через shap) для TF-бэкенда требует tf_keras
+tf_keras==2.21.0

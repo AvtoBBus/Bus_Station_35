@@ -1,0 +1,25 @@
+# Dev-режим для сервиса ML: код монтируется с хоста, uvicorn работает с --reload.
+# Файл подхватывается автоматически командой `docker compose up`.
+# Чтобы запустить ровно то, что собрано в образ (production-режим):
+#   docker compose -f docker-compose.yml up -d
+services:
+    xssdetector:
+        volumes:
+            - ./XSSDetector.ML:/XSSDetector
+        command:
+            - uvicorn
+            - main:app
+            - --host
+            - 0.0.0.0
+            - --port
+            - "8001"
+            - --reload
+            - --reload-dir
+            - /XSSDetector
+            # датасеты и артефакты не должны попадать в наблюдение за файлами
+            - --reload-exclude
+            - "*/ml/datasets/*"
+            - --reload-exclude
+            - "*/ml/artifacts/*"
+            - --reload-exclude
+            - "*/__pycache__/*"

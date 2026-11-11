@@ -1,0 +1,21 @@
+{
+    "accuracy": 0.9803237858032379,
+    "precision": 0.9805890227576974,
+    "recall": 0.966996699669967,
+    "f1_score": 0.9737454303755401,
+    "roc_auc": 0.995223094059406,
+    "pr_auc": 0.992219336295646,
+    "tpr_at_1pct_fpr": 0.9574257425742574,
+    "confusion_matrix": [
+        [
+            9884,
+            116
+        ],
+        [
+            200,
+            5860
+        ]
+    ],
+    "model": "svm",
+    "dataset": "XSSDetector/ml/datasets/processed/unified_dataset.csv"
+}

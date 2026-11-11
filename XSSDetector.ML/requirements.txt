@@ -1,0 +1,18 @@
+# Рантайм-зависимости API (/predict, /explain).
+# Тяжёлые ML-стеки ставятся отдельными файлами и включаются build-arg-ами:
+#   requirements-tensorflow.txt  -> LSTM / BiLSTM / Char-CNN
+#   requirements-transformer.txt -> DistilBERT (нужен CPU-torch, ставится в Dockerfile)
+# Зависимости для обучения и подготовки данных: requirements-train.txt
+fastapi==0.119.0
+uvicorn==0.37.0
+pydantic==2.12.3
+numpy==2.2.6
+pandas==2.3.2
+scikit-learn==1.7.2
+joblib==1.5.2
+catboost==1.2.8
+shap==0.48.0
+PyYAML==6.0.3
+# нужен uvicorn --reload в dev-режиме (docker-compose.override.yml), чтобы
+# --reload-exclude отсекал ml/datasets и ml/artifacts от слежки за файлами
+watchfiles==1.1.1

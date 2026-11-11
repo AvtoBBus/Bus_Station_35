@@ -1,0 +1,54 @@
+[
+  {
+    "round": 0,
+    "clean_metrics": {
+      "name": "Baseline",
+      "roc_auc": 0.9991730182926828,
+      "pr_auc": 0.9871776033538561,
+      "tpr_1pct_fpr": 0.99375,
+      "recall_xss": 0.99375,
+      "fpr": 0.05640243902439024
+    },
+    "evasion_rate": 50.0,
+    "n_adversarial_samples": 0
+  },
+  {
+    "round": 1,
+    "clean_metrics": {
+      "name": "Round 1",
+      "roc_auc": 0.9984791031504063,
+      "pr_auc": 0.9733685235122664,
+      "tpr_1pct_fpr": 0.9875,
+      "recall_xss": 0.9,
+      "fpr": 0.0006097560975609762
+    },
+    "evasion_rate": 30.0,
+    "n_adversarial_samples": 3
+  },
+  {
+    "round": 2,
+    "clean_metrics": {
+      "name": "Round 2",
+      "roc_auc": 0.9988198678861788,
+      "pr_auc": 0.9736350144918622,
+      "tpr_1pct_fpr": 0.9875,
+      "recall_xss": 0.89375,
+      "fpr": 0.0006097560975609762
+    },
+    "evasion_rate": 60.0,
+    "n_adversarial_samples": 6
+  },
+  {
+    "round": 3,
+    "clean_metrics": {
+      "name": "Round 3",
+      "roc_auc": 0.9988903709349594,
+      "pr_auc": 0.9735437880414909,
+      "tpr_1pct_fpr": 0.9875,
+      "recall_xss": 0.89375,
+      "fpr": 0.000508130081300795
+    },
+    "evasion_rate": 40.0,
+    "n_adversarial_samples": 4
+  }
+]

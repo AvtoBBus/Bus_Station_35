@@ -1,6 +1,0 @@
-{
-"meta":{"test_sets":["test"],"test_metrics":[{"best_value":"Max","name":"AUC"},{"best_value":"Min","name":"Logloss"}],"learn_metrics":[{"best_value":"Min","name":"Logloss"}],"launch_mode":"Train","parameters":"","iteration_count":10000,"learn_sets":["learn"],"name":"experiment"},
-"iterations":[
-{"learn":[0.5187115573],"iteration":0,"passed_time":0.02193299529,"remaining_time":219.3080199,"test":[0.9992441421,0.5179324883]},
-{"learn":[0.005730595146],"iteration":50,"passed_time":1.287156987,"remaining_time":251.096566,"test":[1,0.005816402684]}
-]}
