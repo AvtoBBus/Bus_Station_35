@@ -5,3 +5,7 @@ catboost_info/
 ml/artifacts/runs/
 !ml/artifacts/.gitkeep
 ml/datasets/interim/cache_wp/
+# чекпоинты обучения (optimizer.pt по ~0.5 ГБ) не нужны ни в git, ни в образе
+ml/models/**/checkpoints/
+**/optimizer.pt
+*.prompt

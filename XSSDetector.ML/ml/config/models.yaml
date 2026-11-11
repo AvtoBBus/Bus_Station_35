@@ -1,0 +1,48 @@
+models:
+  catboost:
+    name: "CatBoost"
+    group: classical
+    train_script: "models/catboost/train.py"
+    evaluate_script: "models/catboost/evaluate_lodo.py"
+
+  random_forest:
+    name: "Random Forest"
+    group: classical
+    train_script: "models/random_forest/train.py"
+    evaluate_script: "models/random_forest/evaluate_lodo.py"
+
+  logistic_regression:
+    name: "Logistic Regression"
+    group: classical
+    train_script: "models/logistic_regression/train.py"
+    evaluate_script: "models/logistic_regression/evaluate_lodo.py"
+
+  svm:
+    name: "SVM"
+    group: classical
+    train_script: "models/svm/train.py"
+    evaluate_script: "models/svm/evaluate_lodo.py"
+
+  lstm:
+    name: "LSTM"
+    group: complex
+    train_script: "models/lstm/train.py"
+    evaluate_script: "models/lstm/evaluate_lodo.py"
+
+  bilstm:
+    name: "BiLSTM"
+    group: complex
+    train_script: "models/bilstm/train.py"
+    evaluate_script: "models/bilstm/evaluate_lodo.py"
+
+  transformer:
+    name: "Transformer"
+    group: complex
+    train_script: "models/transformer/train.py"
+    evaluate_script: "models/transformer/evaluate_lodo.py"
+
+  char_cnn:
+    name: "Char-CNN"
+    group: complex
+    train_script: "models/char_cnn/train.py"
+    evaluate_script: "models/char_cnn/evaluate_lodo.py"

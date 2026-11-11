@@ -1,0 +1,3 @@
+# DistilBERT для /predict и /explain.
+# torch ставится отдельно CPU-сборкой в Dockerfile (см. TORCH_VERSION).
+transformers==4.53.0
