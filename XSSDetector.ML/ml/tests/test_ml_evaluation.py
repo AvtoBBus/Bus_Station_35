@@ -95,14 +95,43 @@ class Summary24Tests(unittest.TestCase):
             self.assertFalse(v["insufficient"])
             self.assertEqual(v["metrics"]["roc_auc"]["result"], "classical_better")
             self.assertEqual(v["metrics"]["pr_auc"]["result"], "no_difference")
-            self.assertIn("не превосходят", v["text"])
+            self.assertIn("Классические методы лучше", v["text"])
 
     def test_conflicting_metrics_give_no_single_answer(self):
         with tempfile.TemporaryDirectory() as d:
             d = Path(d)
             _lodo(d, "lodo_results_rf.csv", {s: (0.7, 0.9, 0.7) for s in "abc"})
             _lodo(d, "lodo_results_lstm.csv", {s: (0.9, 0.3, 0.9) for s in "abc"})
-            self.assertIn("расходятся", build_summary(d)["verdict"]["text"])
+            self.assertIn("Однозначного преимущества", build_summary(d)["verdict"]["text"])
+
+
+class RealLodoNumbersTests(unittest.TestCase):
+    """Числа из реального прогона LODO (5 источников, 8 моделей): лучший отдельный классический (CatBoost) выигрывает,
+    но как группы классические и сложные модели по ROC-AUC не различаются."""
+
+    ROC = {"bilstm": [.997, .953, .994, .830, .841], "catboost": [.999, .961, .980, .983, .938],
+           "char_cnn": [.890, .762, .984, .993, .823], "logistic_regression": [.994, .953, .940, .888, .742],
+           "lstm": [.952, .877, .991, .996, .831], "random_forest": [.971, .942, .968, .996, .621],
+           "svm": [.991, .927, .870, .887, .450], "transformer": [.954, .732, .832, .971, .828]}
+    TPR = {"bilstm": [.987, .513, .883, .457, .461], "catboost": [.962, .722, .842, .689, .557],
+           "char_cnn": [.477, .191, .835, .946, .329], "logistic_regression": [.947, .542, .122, .194, .539],
+           "lstm": [.597, .396, .863, .989, .407], "random_forest": [.910, .403, .716, .943, .414],
+           "svm": [.908, .134, .002, .331, .154], "transformer": [.770, .206, .435, .525, .377]}
+
+    def test_group_level_verdict_is_not_driven_by_a_single_model(self):
+        sources = ["csic2010", "ecmlpkdd2007", "httpparams", "kaggle", "modsecurity"]
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            for model in self.ROC:
+                pd.DataFrame({"source": sources, "roc_auc": self.ROC[model], "tpr_at_1pct_fpr": self.TPR[model],
+                              "pr_auc": [0.7] * 5}).to_csv(d / f"lodo_results_{model}.csv", index=False)
+            v = build_summary(d)["verdict"]
+            self.assertEqual(v["best_model"], "catboost")
+            self.assertEqual(v["metrics"]["roc_auc"]["result"], "classical_better")          # лучшая против лучшей
+            self.assertEqual(v["metrics"]["roc_auc"]["group"]["result"], "no_difference")    # группа против группы
+            self.assertAlmostEqual(v["metrics"]["roc_auc"]["group"]["classical_mean"], 0.9000, places=3)
+            self.assertIn("Однозначного преимущества", v["text"])
+            self.assertIn("catboost", v["text"])
 
 
 if __name__ == "__main__":

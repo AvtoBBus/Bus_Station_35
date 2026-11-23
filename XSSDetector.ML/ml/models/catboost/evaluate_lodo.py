@@ -4,10 +4,13 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 from joblib import Parallel, delayed
+from sklearn.model_selection import train_test_split
 
 sys.path.append(str(Path(__file__).resolve().parent.parent.parent.parent))
 
 from catboost import CatBoostClassifier, Pool
+from ml.evaluation.lodo_sources import select_lodo_sources, cap_per_class
+from ml.paths import RESULTS_DIR
 from ml.features.extract_features import extract_features
 from config import ModelConfig, DataConfig
 from ml.training.metrics import calculate_metrics
@@ -18,7 +21,8 @@ def get_categorical_features(X: pd.DataFrame):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset", default=DataConfig().dataset_path)
-    parser.add_argument("--output-dir", default="XSSDetector/results")
+    parser.add_argument("--output-dir", default=str(RESULTS_DIR))
+    parser.add_argument("--sources", nargs="*", default=None, help="LODO-источники (по умолчанию общий список из ml/evaluation/lodo_sources.py)")
     args = parser.parse_args()
 
     model_cfg = ModelConfig()
@@ -26,15 +30,10 @@ def main():
 
     df = pd.read_csv(args.dataset)
     
-    # Ограничиваем выборку для скорости LODO (как в train.py)
+    # Ограничение числа обучающих примеров (до max_samples на класс) делается ВНУТРИ фолда, только для train.
     max_samples = getattr(data_cfg, 'max_samples_per_class', 50000)
-    if max_samples > 0:
-        print(f"Балансировка датасета для LODO: по {max_samples} строк на класс...")
-        df_0 = df[df[data_cfg.label_column] == 0].sample(n=min(max_samples, len(df[df[data_cfg.label_column] == 0])), random_state=42)
-        df_1 = df[df[data_cfg.label_column] == 1].sample(n=min(max_samples, len(df[df[data_cfg.label_column] == 1])), random_state=42)
-        df = pd.concat([df_0, df_1]).sample(frac=1, random_state=42).reset_index(drop=True)
 
-    sources_for_test = df['source'].value_counts()[df['source'].value_counts() > 1000].index.tolist()
+    sources_for_test = select_lodo_sources(df, args.sources)
     
     params = model_cfg.get_model_params()
     params['verbose'] = False
@@ -45,6 +44,7 @@ def main():
     for test_source in sources_for_test:
         print(f"\n===== Тестируем на {test_source} =====")
         train_df = df[df['source'] != test_source]
+        train_df = train_df.iloc[cap_per_class(train_df['label'].values, max_samples)]
         test_df = df[df['source'] == test_source]
         
         # Параллельное извлечение признаков
@@ -67,11 +67,14 @@ def main():
                 X_test[col] = X_test[col].astype(str)
                 
         # Создаем Pool с указанием текстовых и категориальных фичей
-        train_pool = Pool(X_train, y_train, cat_features=cat_features, text_features=['text'])
-        test_pool = Pool(X_test, y_test, cat_features=cat_features, text_features=['text'])
-        
+        # Выбор итерации (use_best_model) делаем на отложенной части ОБУЧАЮЩИХ источников,
+        # а не на тестовом источнике: иначе модель подгоняется под целевой источник и LODO завышен.
+        X_fit, X_val, y_fit, y_val = train_test_split(X_train, y_train, test_size=0.1, stratify=y_train, random_state=42)
+        fit_pool = Pool(X_fit, y_fit, cat_features=cat_features, text_features=['text'])
+        val_pool = Pool(X_val, y_val, cat_features=cat_features, text_features=['text'])
+
         model = CatBoostClassifier(**params)
-        model.fit(train_pool, eval_set=test_pool, use_best_model=True)
+        model.fit(fit_pool, eval_set=val_pool, use_best_model=True)
         
         y_pred_proba = model.predict_proba(X_test)[:, 1]
         y_pred = model.predict(X_test)
