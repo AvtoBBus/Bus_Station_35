@@ -7,6 +7,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parent.parent.parent.parent))
 
 from sklearn.ensemble import RandomForestClassifier
+from ml.evaluation.lodo_sources import select_lodo_sources
 from ml.paths import RESULTS_DIR
 from ml.features.extract_features import extract_features
 from config import ModelConfig, DataConfig
@@ -17,6 +18,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset", default=DataConfig().dataset_path)
     parser.add_argument("--output-dir", default=str(RESULTS_DIR))
+    parser.add_argument("--sources", nargs="*", default=None, help="LODO-источники (по умолчанию общий список из ml/evaluation/lodo_sources.py)")
     args = parser.parse_args()
 
     model_cfg = ModelConfig()
@@ -36,7 +38,7 @@ def main():
     y_all = df[data_cfg.label_column].values
     sources = df['source'].values
     
-    source_names = ['fwaf', 'csic2010', 'kaggle', 'vulnxss', 'httpparams']
+    source_names = select_lodo_sources(df, args.sources)
     results = {}
     
     for test_source in source_names:

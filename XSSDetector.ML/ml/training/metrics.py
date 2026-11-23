@@ -12,22 +12,18 @@ from sklearn.metrics import (
 )
 
 def tpr_at_1pct_fpr(y_true, y_pred_proba):
-    """Доля правильно обнаруженных атак при 1% ложных срабатываний."""
-    sorted_indices = np.argsort(y_pred_proba)[::-1]
-    sorted_true = y_true[sorted_indices]
-    total_neg = np.sum(y_true == 0)
-    if total_neg == 0: return 0.0
-    
-    target_fp = int(0.01 * total_neg)
-    fp, tp = 0, 0
-    for label in sorted_true:
-        if label == 0: fp += 1
-        else: tp += 1
-        if fp >= target_fp: break
-            
-    total_pos = np.sum(y_true == 1)
-    if total_pos == 0: return 0.0
-    return float(tp / total_pos)
+    """Максимальная доля обнаруженных атак (TPR) при FPR <= 1%, по ROC-кривой.
+
+    None, если в y_true один класс (метрика не определена).
+    Если нормальных примеров меньше 100, условие FPR <= 1% означает FPR = 0 (метрика грубая).
+    Прежняя реализация при числе нормальных < 100 останавливалась на первом же примере и давала ~0.
+    """
+    y = np.asarray(y_true)
+    if len(np.unique(y)) < 2:
+        return None
+    fpr, tpr, _ = roc_curve(y, np.asarray(y_pred_proba, dtype=float))
+    return float(tpr[fpr <= 0.01].max())
+
 
 def calculate_metrics(y_true, y_pred, y_proba) -> dict:
     """Вычисляет стандартный набор метрик."""
@@ -37,7 +33,7 @@ def calculate_metrics(y_true, y_pred, y_proba) -> dict:
         "recall": float(recall_score(y_true, y_pred, zero_division=0)),
         "f1_score": float(f1_score(y_true, y_pred, zero_division=0)),
         "roc_auc": float(roc_auc_score(y_true, y_proba)) if len(np.unique(y_true)) > 1 else float('nan'),
-        "pr_auc": float(average_precision_score(y_true, y_proba)),
+        "pr_auc": float(average_precision_score(y_true, y_proba)) if len(np.unique(y_true)) > 1 else None,
         "tpr_at_1pct_fpr": tpr_at_1pct_fpr(y_true, y_proba),
         "confusion_matrix": confusion_matrix(y_true, y_pred).tolist()
     }

@@ -14,6 +14,7 @@ import torch
 from datasets import Dataset
 from transformers import DistilBertForSequenceClassification, DistilBertTokenizerFast, Trainer, TrainingArguments
 
+from ml.evaluation.lodo_sources import select_lodo_sources
 from ml.paths import RESULTS_DIR
 from ml.features.preprocess import preprocess_for_sequence_model
 from config import ModelConfig, DataConfig
@@ -24,6 +25,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset", default=DataConfig().dataset_path)
     parser.add_argument("--output-dir", default=str(RESULTS_DIR))
+    parser.add_argument("--sources", nargs="*", default=None, help="LODO-источники (по умолчанию общий список из ml/evaluation/lodo_sources.py)")
     args = parser.parse_args()
 
     config = ModelConfig()
@@ -31,7 +33,7 @@ def main():
     
     tokenizer = DistilBertTokenizerFast.from_pretrained("distilbert-base-uncased")
     
-    source_names = ['fwaf', 'csic2010', 'kaggle', 'vulnxss', 'httpparams']
+    source_names = select_lodo_sources(df, args.sources)
     results = {}
     
     for test_source in source_names:

@@ -17,6 +17,7 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Bidirectional, LSTM, Dense, Dropout, Embedding
 from tensorflow.keras.callbacks import EarlyStopping
 
+from ml.evaluation.lodo_sources import select_lodo_sources, cap_per_class
 from ml.paths import RESULTS_DIR
 from ml.features.preprocess import preprocess_for_sequence_model
 from config import ModelConfig, DataConfig
@@ -26,6 +27,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset", default=DataConfig().dataset_path)
     parser.add_argument("--output-dir", default=str(RESULTS_DIR))
+    parser.add_argument("--sources", nargs="*", default=None, help="LODO-источники (по умолчанию общий список из ml/evaluation/lodo_sources.py)")
     args = parser.parse_args()
 
     config = ModelConfig()
@@ -34,15 +36,10 @@ def main():
     print(f"Загрузка {args.dataset}...")
     df = pd.read_csv(args.dataset)
 
-    # 🔥 ОГРАНИЧЕНИЕ ВЫБОРКИ (как для LSTM и CatBoost)
+    # Ограничение числа обучающих примеров (до max_samples на класс) делается ВНУТРИ фолда, только для train.
     max_samples = getattr(data_cfg, 'max_samples_per_class', 50000)
-    if max_samples > 0:
-        print(f"Балансировка датасета для LODO: по {max_samples} строк на класс...")
-        df_0 = df[df[data_cfg.label_column] == 0].sample(n=min(max_samples, len(df[df[data_cfg.label_column] == 0])), random_state=42)
-        df_1 = df[df[data_cfg.label_column] == 1].sample(n=min(max_samples, len(df[df[data_cfg.label_column] == 1])), random_state=42)
-        df = pd.concat([df_0, df_1]).sample(frac=1, random_state=42).reset_index(drop=True)
 
-    source_names = ['fwaf', 'csic2010', 'kaggle', 'vulnxss', 'httpparams']
+    source_names = select_lodo_sources(df, args.sources)
     results = {}
 
     for test_source in source_names:
@@ -51,6 +48,7 @@ def main():
 
         test_mask = (df['source'] == test_source)
         train_df = df[~test_mask]
+        train_df = train_df.iloc[cap_per_class(train_df['label'].values, max_samples)]
         test_df = df[test_mask]
 
         train_texts = [preprocess_for_sequence_model(str(t)) for t in train_df['text']]

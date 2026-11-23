@@ -8,6 +8,7 @@ sys.path.append(str(Path(__file__).resolve().parent.parent.parent.parent))
 
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
+from ml.evaluation.lodo_sources import select_lodo_sources
 from ml.paths import RESULTS_DIR
 from ml.features.extract_features import extract_features
 from config import DataConfig
@@ -18,6 +19,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset", default=DataConfig().dataset_path)
     parser.add_argument("--output-dir", default=str(RESULTS_DIR))
+    parser.add_argument("--sources", nargs="*", default=None, help="LODO-источники (по умолчанию общий список из ml/evaluation/lodo_sources.py)")
     args = parser.parse_args()
 
     data_cfg = DataConfig()
@@ -35,7 +37,7 @@ def main():
     sources = df['source'].values
     
     unique_sources = df['source'].unique()
-    source_names = [s for s in ['fwaf', 'csic2010', 'kaggle', 'vulnxss', 'httpparams'] if s in unique_sources]
+    source_names = select_lodo_sources(df, args.sources)
     
     results = {}
     
